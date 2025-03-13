@@ -36,6 +36,7 @@ use datafusion_common::{DataFusionError, ScalarValue};
 use datafusion_execution::{
     object_store::ObjectStoreUrl, SendableRecordBatchStream, TaskContext,
 };
+use datafusion_expr::statistics::{ColumnStatisticsNew, StatisticsNew};
 use datafusion_physical_expr::{
     expressions::Column, EquivalenceProperties, LexOrdering, Partitioning,
     PhysicalSortExpr,
@@ -150,7 +151,7 @@ pub struct FileScanConfig {
     pub constraints: Constraints,
     /// Estimated overall statistics of the files, taking `filters` into account.
     /// Defaults to [`Statistics::new_unknown`].
-    pub statistics: Statistics,
+    pub statistics: StatisticsNew,
     /// Columns on which to project the data. Indexes that are higher than the
     /// number of columns of `file_schema` refer to `table_partition_cols`.
     pub projection: Option<Vec<usize>>,
@@ -254,7 +255,7 @@ impl DataSource for FileScanConfig {
             .with_constraints(constraints)
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<StatisticsNew> {
         Ok(self.projected_stats())
     }
 
@@ -323,7 +324,7 @@ impl FileScanConfig {
         file_schema: SchemaRef,
         file_source: Arc<dyn FileSource>,
     ) -> Self {
-        let statistics = Statistics::new_unknown(&file_schema);
+        let statistics = StatisticsNew::new_unknown(&file_schema).unwrap();
 
         let mut config = Self {
             object_store_url,
@@ -357,7 +358,7 @@ impl FileScanConfig {
     }
 
     /// Set the statistics of the files
-    pub fn with_statistics(mut self, statistics: Statistics) -> Self {
+    pub fn with_statistics(mut self, statistics: StatisticsNew) -> Self {
         self.statistics = statistics.clone();
         self.file_source = self.file_source.with_statistics(statistics);
         self
@@ -372,7 +373,7 @@ impl FileScanConfig {
         }
     }
 
-    fn projected_stats(&self) -> Statistics {
+    fn projected_stats(&self) -> StatisticsNew {
         let statistics = self
             .file_source
             .statistics()
@@ -386,12 +387,12 @@ impl FileScanConfig {
                     statistics.column_statistics[idx].clone()
                 } else {
                     // TODO provide accurate stat for partition column (#1186)
-                    ColumnStatistics::new_unknown()
+                    ColumnStatisticsNew::new_unknown().unwrap()
                 }
             })
             .collect();
 
-        Statistics {
+        StatisticsNew {
             num_rows: statistics.num_rows,
             // TODO correct byte size: https://github.com/apache/datafusion/issues/14936
             total_byte_size: statistics.total_byte_size,

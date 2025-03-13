@@ -25,6 +25,9 @@ use arrow::datatypes::{DataType, Schema, SchemaRef};
 
 /// Represents a value with a degree of certainty. `Precision` is used to
 /// propagate information the precision of statistical values.
+/// // #[deprecated(
+//     note = "Precision will be replaced by Distribution in future updates"
+// )]
 #[derive(Clone, PartialEq, Eq, Default, Copy)]
 pub enum Precision<T: Debug + Clone + PartialEq + Eq + PartialOrd> {
     /// The exact value is known
