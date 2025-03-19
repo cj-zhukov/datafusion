@@ -32,6 +32,7 @@ use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_datasource::file_stream::FileOpener;
 use datafusion_datasource::source::DataSourceExec;
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{EquivalenceProperties, Partitioning};
 use datafusion_physical_expr_common::sort_expr::LexOrdering;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
@@ -137,7 +138,7 @@ impl ExecutionPlan for AvroExec {
         self.inner.execute(partition, context)
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         self.inner.statistics()
     }
 
@@ -161,7 +162,7 @@ pub struct AvroSource {
     batch_size: Option<usize>,
     projection: Option<Vec<String>>,
     metrics: ExecutionPlanMetricsSet,
-    projected_statistics: Option<Statistics>,
+    projected_statistics: Option<TableStatistics>,
 }
 
 impl AvroSource {
@@ -208,7 +209,7 @@ impl FileSource for AvroSource {
         conf.schema = Some(schema);
         Arc::new(conf)
     }
-    fn with_statistics(&self, statistics: Statistics) -> Arc<dyn FileSource> {
+    fn with_statistics(&self, statistics: TableStatistics) -> Arc<dyn FileSource> {
         let mut conf = self.clone();
         conf.projected_statistics = Some(statistics);
         Arc::new(conf)
@@ -224,7 +225,7 @@ impl FileSource for AvroSource {
         &self.metrics
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         let statistics = &self.projected_statistics;
         Ok(statistics
             .clone()

@@ -36,6 +36,7 @@ use datafusion_common::config::ConfigOptions;
 use datafusion_common::error::Result;
 use datafusion_common::stats::Precision;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
+use datafusion_common::ScalarValue;
 use datafusion_expr::logical_plan::JoinType;
 use datafusion_physical_expr::expressions::{Column, NoOp};
 use datafusion_physical_expr::utils::map_columns_before_projection;
@@ -1112,11 +1113,15 @@ fn get_repartition_requirement_status(
     {
         // Decide whether adding a round robin is beneficial depending on
         // the statistical information we have on the number of rows:
-        let roundrobin_beneficial_stats = match child.statistics()?.num_rows {
-            Precision::Exact(n_rows) => n_rows > batch_size,
-            Precision::Inexact(n_rows) => !should_use_estimates || (n_rows > batch_size),
-            Precision::Absent => true,
-        };
+        // let roundrobin_beneficial_stats = match child.statistics()?.num_rows {
+            // Precision::Exact(n_rows) => n_rows > batch_size,
+            // Precision::Inexact(n_rows) => !should_use_estimates || (n_rows > batch_size),
+            // Precision::Absent => true,
+        // };
+        let roundrobin_beneficial_stats = match child.statistics()?.num_rows.as_ref() {
+            &ScalarValue::Null => true, 
+            _ => !should_use_estimates || (child.statistics()?.num_rows.as_ref() > &ScalarValue::from(batch_size as u64))
+        };  
         let is_hash = matches!(requirement, Distribution::HashPartitioned(_));
         // Hash re-partitioning is necessary when the input has more than one
         // partitions:

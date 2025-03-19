@@ -22,7 +22,7 @@ use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
-use datafusion_expr::statistics::StatisticsNew;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion_physical_plan::metrics::{ExecutionPlanMetricsSet, MetricsSet};
 use datafusion_physical_plan::projection::ProjectionExec;
@@ -31,7 +31,7 @@ use datafusion_physical_plan::{
 };
 
 use datafusion_common::config::ConfigOptions;
-use datafusion_common::{Constraints, Statistics};
+use datafusion_common::Constraints;
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
 use datafusion_physical_expr::{EquivalenceProperties, Partitioning};
 use datafusion_physical_expr_common::sort_expr::LexOrdering;
@@ -68,7 +68,7 @@ pub trait DataSource: Send + Sync + Debug {
 
     fn output_partitioning(&self) -> Partitioning;
     fn eq_properties(&self) -> EquivalenceProperties;
-    fn statistics(&self) -> datafusion_common::Result<StatisticsNew>;
+    fn statistics(&self) -> datafusion_common::Result<TableStatistics>;
     /// Return a copy of this DataSource with a new fetch limit
     fn with_fetch(&self, _limit: Option<usize>) -> Option<Arc<dyn DataSource>>;
     fn fetch(&self) -> Option<usize>;
@@ -171,7 +171,7 @@ impl ExecutionPlan for DataSourceExec {
         Some(self.data_source.metrics().clone_inner())
     }
 
-    fn statistics(&self) -> datafusion_common::Result<StatisticsNew> {
+    fn statistics(&self) -> datafusion_common::Result<TableStatistics> {
         self.data_source.statistics()
     }
 

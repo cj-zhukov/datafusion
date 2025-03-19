@@ -175,7 +175,7 @@ mod tests {
             prepare_store(&state, file_compression_type.to_owned(), tmp_dir.path()).await;
 
         let source = Arc::new(JsonSource::new());
-        let conf = FileScanConfig::new(object_store_url, file_schema, source)
+        let conf = FileScanConfig::new(object_store_url, file_schema, source)?
             .with_file_groups(file_groups)
             .with_limit(Some(3))
             .with_file_compression_type(file_compression_type.to_owned());
@@ -249,7 +249,7 @@ mod tests {
         let missing_field_idx = file_schema.fields.len() - 1;
 
         let source = Arc::new(JsonSource::new());
-        let conf = FileScanConfig::new(object_store_url, file_schema, source)
+        let conf = FileScanConfig::new(object_store_url, file_schema, source)?
             .with_file_groups(file_groups)
             .with_limit(Some(3))
             .with_file_compression_type(file_compression_type.to_owned());
@@ -292,7 +292,7 @@ mod tests {
             prepare_store(&state, file_compression_type.to_owned(), tmp_dir.path()).await;
 
         let source = Arc::new(JsonSource::new());
-        let conf = FileScanConfig::new(object_store_url, file_schema, source)
+        let conf = FileScanConfig::new(object_store_url, file_schema, source)?
             .with_file_groups(file_groups)
             .with_projection(Some(vec![0, 2]))
             .with_file_compression_type(file_compression_type.to_owned());
@@ -340,7 +340,7 @@ mod tests {
             prepare_store(&state, file_compression_type.to_owned(), tmp_dir.path()).await;
 
         let source = Arc::new(JsonSource::new());
-        let conf = FileScanConfig::new(object_store_url, file_schema, source)
+        let conf = FileScanConfig::new(object_store_url, file_schema, source)?
             .with_file_groups(file_groups)
             .with_projection(Some(vec![3, 0, 2]))
             .with_file_compression_type(file_compression_type.to_owned());

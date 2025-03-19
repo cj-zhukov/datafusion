@@ -34,6 +34,7 @@ use datafusion_common::config::TableParquetOptions;
 use datafusion_common::Statistics;
 use datafusion_datasource::file::FileSource;
 use datafusion_datasource::file_scan_config::FileScanConfig;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr_common::physical_expr::PhysicalExpr;
 use datafusion_physical_optimizer::pruning::PruningPredicate;
 use datafusion_physical_plan::metrics::{ExecutionPlanMetricsSet, MetricBuilder};
@@ -270,7 +271,7 @@ pub struct ParquetSource {
     pub(crate) batch_size: Option<usize>,
     /// Optional hint for the size of the parquet metadata
     pub(crate) metadata_size_hint: Option<usize>,
-    pub(crate) projected_statistics: Option<Statistics>,
+    pub(crate) projected_statistics: Option<TableStatistics>,
 }
 
 impl ParquetSource {
@@ -516,7 +517,7 @@ impl FileSource for ParquetSource {
         Arc::new(Self { ..self.clone() })
     }
 
-    fn with_statistics(&self, statistics: Statistics) -> Arc<dyn FileSource> {
+    fn with_statistics(&self, statistics: TableStatistics) -> Arc<dyn FileSource> {
         let mut conf = self.clone();
         conf.projected_statistics = Some(statistics);
         Arc::new(conf)
@@ -530,7 +531,7 @@ impl FileSource for ParquetSource {
         &self.metrics
     }
 
-    fn statistics(&self) -> datafusion_common::Result<Statistics> {
+    fn statistics(&self) -> datafusion_common::Result<TableStatistics> {
         let statistics = &self.projected_statistics;
         let statistics = statistics
             .clone()
@@ -542,7 +543,7 @@ impl FileSource for ParquetSource {
             || self.page_pruning_predicate().is_some()
             || (self.predicate().is_some() && self.pushdown_filters())
         {
-            Ok(statistics.to_inexact())
+            statistics.to_inexact()
         } else {
             Ok(statistics)
         }

@@ -35,6 +35,7 @@ use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion_common::{not_impl_err, DataFusionError, Result};
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryReservation};
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{EquivalenceProperties, Partitioning};
 
 use futures::{ready, Stream, StreamExt};
@@ -204,8 +205,8 @@ impl ExecutionPlan for RecursiveQueryExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        Ok(Statistics::new_unknown(&self.schema()))
+    fn statistics(&self) -> Result<TableStatistics> {
+        TableStatistics::new_unknown(&self.schema())
     }
 }
 

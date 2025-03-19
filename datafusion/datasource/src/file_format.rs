@@ -33,6 +33,7 @@ use async_trait::async_trait;
 use datafusion_catalog::Session;
 use datafusion_common::file_options::file_type::FileType;
 use datafusion_common::{internal_err, not_impl_err, GetExt, Result, Statistics};
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_expr::Expr;
 use datafusion_physical_expr::{LexRequirement, PhysicalExpr};
 use datafusion_physical_plan::ExecutionPlan;
@@ -86,7 +87,7 @@ pub trait FileFormat: Send + Sync + fmt::Debug {
         store: &Arc<dyn ObjectStore>,
         table_schema: SchemaRef,
         object: &ObjectMeta,
-    ) -> Result<Statistics>;
+    ) -> Result<TableStatistics>;
 
     /// Take a list of files and convert it to the appropriate executor
     /// according to this file format.

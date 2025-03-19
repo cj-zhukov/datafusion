@@ -42,6 +42,7 @@ use datafusion_catalog::TableProvider;
 use datafusion_common::stats::Precision;
 use datafusion_common::ScalarValue;
 use datafusion_execution::config::SessionConfig;
+use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution};
 use datafusion_expr::{col, lit, Expr, Operator};
 use datafusion_physical_expr::expressions::{BinaryExpr, Column, Literal};
 
@@ -527,11 +528,12 @@ async fn parquet_statistics() -> Result<()> {
     let stat_cols = physical_plan.statistics()?.column_statistics;
     assert_eq!(stat_cols.len(), 4);
     // stats for the first col are read from the parquet file
-    assert_eq!(stat_cols[0].null_count, Precision::Exact(3));
+    let expected = ProbabilityDistribution::new_uniform_exact(ScalarValue::UInt64(Some(3)))?;
+    assert_eq!(stat_cols[0].null_count, expected);
     // TODO assert partition column (1,2,3) stats once implemented (#1186)
-    assert_eq!(stat_cols[1], ColumnStatistics::new_unknown(),);
-    assert_eq!(stat_cols[2], ColumnStatistics::new_unknown(),);
-    assert_eq!(stat_cols[3], ColumnStatistics::new_unknown(),);
+    assert_eq!(stat_cols[1], ColumnStatisticsNew::new_unknown()?);
+    assert_eq!(stat_cols[2], ColumnStatisticsNew::new_unknown()?);
+    assert_eq!(stat_cols[3], ColumnStatisticsNew::new_unknown()?);
 
     //// WITH PROJECTION ////
     let dataframe = ctx.sql("SELECT mycol, day FROM t WHERE day='28'").await?;
@@ -542,9 +544,10 @@ async fn parquet_statistics() -> Result<()> {
     let stat_cols = physical_plan.statistics()?.column_statistics;
     assert_eq!(stat_cols.len(), 2);
     // stats for the first col are read from the parquet file
-    assert_eq!(stat_cols[0].null_count, Precision::Exact(1));
+    let expected = ProbabilityDistribution::new_uniform_exact(ScalarValue::UInt64(Some(1)))?;
+    assert_eq!(stat_cols[0].null_count, expected);
     // TODO assert partition column stats once implemented (#1186)
-    assert_eq!(stat_cols[1], ColumnStatistics::new_unknown());
+    assert_eq!(stat_cols[1], ColumnStatisticsNew::new_unknown()?);
 
     Ok(())
 }

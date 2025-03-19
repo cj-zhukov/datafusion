@@ -28,7 +28,7 @@ use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
 use datafusion_common::{cast::as_boolean_array, internal_err, Result, ScalarValue};
 use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::Distribution::{self, Bernoulli};
+use datafusion_expr::statistics::ProbabilityDistribution::{self, Bernoulli};
 use datafusion_expr::ColumnarValue;
 
 /// Not expression
@@ -128,7 +128,7 @@ impl PhysicalExpr for NotExpr {
             .map(|result| vec![result]))
     }
 
-    fn evaluate_statistics(&self, children: &[&Distribution]) -> Result<Distribution> {
+    fn evaluate_statistics(&self, children: &[&ProbabilityDistribution]) -> Result<ProbabilityDistribution> {
         match children[0] {
             Bernoulli(b) => {
                 let p_value = b.p_value();
@@ -136,7 +136,7 @@ impl PhysicalExpr for NotExpr {
                     Ok(children[0].clone())
                 } else {
                     let one = ScalarValue::new_one(&p_value.data_type())?;
-                    Distribution::new_bernoulli(one.sub_checked(p_value)?)
+                    ProbabilityDistribution::new_bernoulli(one.sub_checked(p_value)?)
                 }
             }
             _ => internal_err!("NotExpr can only operate on Boolean datatypes"),
@@ -145,9 +145,9 @@ impl PhysicalExpr for NotExpr {
 
     fn propagate_statistics(
         &self,
-        parent: &Distribution,
-        children: &[&Distribution],
-    ) -> Result<Option<Vec<Distribution>>> {
+        parent: &ProbabilityDistribution,
+        children: &[&ProbabilityDistribution],
+    ) -> Result<Option<Vec<ProbabilityDistribution>>> {
         match (parent, children[0]) {
             (Bernoulli(parent), Bernoulli(child)) => {
                 let parent_range = parent.range();
@@ -155,7 +155,7 @@ impl PhysicalExpr for NotExpr {
                     if child.range() == Interval::CERTAINLY_TRUE {
                         None
                     } else {
-                        Some(vec![Distribution::new_bernoulli(ScalarValue::new_zero(
+                        Some(vec![ProbabilityDistribution::new_bernoulli(ScalarValue::new_zero(
                             &child.data_type(),
                         )?)?])
                     }
@@ -163,7 +163,7 @@ impl PhysicalExpr for NotExpr {
                     if child.range() == Interval::CERTAINLY_FALSE {
                         None
                     } else {
-                        Some(vec![Distribution::new_bernoulli(ScalarValue::new_one(
+                        Some(vec![ProbabilityDistribution::new_bernoulli(ScalarValue::new_one(
                             &child.data_type(),
                         )?)?])
                     }
@@ -256,14 +256,14 @@ mod tests {
 
         // Uniform with non-boolean bounds
         assert!(expr
-            .evaluate_statistics(&[&Distribution::new_uniform(
+            .evaluate_statistics(&[&ProbabilityDistribution::new_uniform(
                 Interval::make_unbounded(&DataType::Float64)?
             )?])
             .is_err());
 
         // Exponential
         assert!(expr
-            .evaluate_statistics(&[&Distribution::new_exponential(
+            .evaluate_statistics(&[&ProbabilityDistribution::new_exponential(
                 ScalarValue::from(1.0),
                 ScalarValue::from(1.0),
                 true
@@ -272,7 +272,7 @@ mod tests {
 
         // Gaussian
         assert!(expr
-            .evaluate_statistics(&[&Distribution::new_gaussian(
+            .evaluate_statistics(&[&ProbabilityDistribution::new_gaussian(
                 ScalarValue::from(1.0),
                 ScalarValue::from(1.0),
             )?])
@@ -280,28 +280,28 @@ mod tests {
 
         // Bernoulli
         assert_eq!(
-            expr.evaluate_statistics(&[&Distribution::new_bernoulli(
+            expr.evaluate_statistics(&[&ProbabilityDistribution::new_bernoulli(
                 ScalarValue::from(0.0),
             )?])?,
-            Distribution::new_bernoulli(ScalarValue::from(1.))?
+            ProbabilityDistribution::new_bernoulli(ScalarValue::from(1.))?
         );
 
         assert_eq!(
-            expr.evaluate_statistics(&[&Distribution::new_bernoulli(
+            expr.evaluate_statistics(&[&ProbabilityDistribution::new_bernoulli(
                 ScalarValue::from(1.0),
             )?])?,
-            Distribution::new_bernoulli(ScalarValue::from(0.))?
+            ProbabilityDistribution::new_bernoulli(ScalarValue::from(0.))?
         );
 
         assert_eq!(
-            expr.evaluate_statistics(&[&Distribution::new_bernoulli(
+            expr.evaluate_statistics(&[&ProbabilityDistribution::new_bernoulli(
                 ScalarValue::from(0.25),
             )?])?,
-            Distribution::new_bernoulli(ScalarValue::from(0.75))?
+            ProbabilityDistribution::new_bernoulli(ScalarValue::from(0.75))?
         );
 
         assert!(expr
-            .evaluate_statistics(&[&Distribution::new_generic(
+            .evaluate_statistics(&[&ProbabilityDistribution::new_generic(
                 ScalarValue::Null,
                 ScalarValue::Null,
                 ScalarValue::Null,
@@ -311,7 +311,7 @@ mod tests {
 
         // Unknown with non-boolean interval as range
         assert!(expr
-            .evaluate_statistics(&[&Distribution::new_generic(
+            .evaluate_statistics(&[&ProbabilityDistribution::new_generic(
                 ScalarValue::Null,
                 ScalarValue::Null,
                 ScalarValue::Null,

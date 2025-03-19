@@ -39,6 +39,7 @@ use datafusion_catalog::Session;
 use datafusion_common::cast::as_primitive_array;
 use datafusion_common::project_schema;
 use datafusion_common::stats::Precision;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::EquivalenceProperties;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion_physical_plan::placeholder_row::PlaceholderRowExec;
@@ -179,28 +180,29 @@ impl ExecutionPlan for CustomExecutionPlan {
         Ok(Box::pin(TestCustomRecordBatchStream { nb_batch: 1 }))
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        let batch = TEST_CUSTOM_RECORD_BATCH!().unwrap();
-        Ok(Statistics {
-            num_rows: Precision::Exact(batch.num_rows()),
-            total_byte_size: Precision::Absent,
-            column_statistics: self
-                .projection
-                .clone()
-                .unwrap_or_else(|| (0..batch.columns().len()).collect())
-                .iter()
-                .map(|i| ColumnStatistics {
-                    null_count: Precision::Exact(batch.column(*i).null_count()),
-                    min_value: Precision::Exact(ScalarValue::Int32(aggregate::min(
-                        as_primitive_array::<Int32Type>(batch.column(*i)).unwrap(),
-                    ))),
-                    max_value: Precision::Exact(ScalarValue::Int32(aggregate::max(
-                        as_primitive_array::<Int32Type>(batch.column(*i)).unwrap(),
-                    ))),
-                    ..Default::default()
-                })
-                .collect(),
-        })
+    fn statistics(&self) -> Result<TableStatistics> {
+        // let batch = TEST_CUSTOM_RECORD_BATCH!().unwrap();
+        // Ok(Statistics {
+        //     num_rows: Precision::Exact(batch.num_rows()),
+        //     total_byte_size: Precision::Absent,
+        //     column_statistics: self
+        //         .projection
+        //         .clone()
+        //         .unwrap_or_else(|| (0..batch.columns().len()).collect())
+        //         .iter()
+        //         .map(|i| ColumnStatistics {
+        //             null_count: Precision::Exact(batch.column(*i).null_count()),
+        //             min_value: Precision::Exact(ScalarValue::Int32(aggregate::min(
+        //                 as_primitive_array::<Int32Type>(batch.column(*i)).unwrap(),
+        //             ))),
+        //             max_value: Precision::Exact(ScalarValue::Int32(aggregate::max(
+        //                 as_primitive_array::<Int32Type>(batch.column(*i)).unwrap(),
+        //             ))),
+        //             ..Default::default()
+        //         })
+        //         .collect(),
+        // })
+        todo!()
     }
 }
 

@@ -94,6 +94,7 @@ use datafusion::{
 use datafusion_common::config::ConfigOptions;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion_common::ScalarValue;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_expr::{FetchType, InvariantLevel, Projection, SortExpr};
 use datafusion_optimizer::optimizer::ApplyOrder;
 use datafusion_optimizer::AnalyzerRule;
@@ -756,10 +757,10 @@ impl ExecutionPlan for TopKExec {
         }))
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         // to improve the optimizability of this plan
         // better statistics inference could be provided
-        Ok(Statistics::new_unknown(&self.schema()))
+        TableStatistics::new_unknown(&self.schema())
     }
 }
 

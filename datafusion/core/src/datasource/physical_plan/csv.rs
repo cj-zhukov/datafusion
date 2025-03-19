@@ -107,7 +107,7 @@ mod tests {
         )?;
 
         let source = Arc::new(CsvSource::new(true, b',', b'"'));
-        let config = partitioned_csv_config(file_schema, file_groups, source)
+        let config = partitioned_csv_config(file_schema, file_groups, source)?
             .with_file_compression_type(file_compression_type)
             .with_newlines_in_values(false)
             .with_projection(Some(vec![0, 2, 4]));
@@ -170,7 +170,7 @@ mod tests {
         )?;
 
         let source = Arc::new(CsvSource::new(true, b',', b'"'));
-        let config = partitioned_csv_config(file_schema, file_groups, source)
+        let config = partitioned_csv_config(file_schema, file_groups, source)?
             .with_newlines_in_values(false)
             .with_file_compression_type(file_compression_type.to_owned())
             .with_projection(Some(vec![4, 0, 2]));
@@ -233,7 +233,7 @@ mod tests {
         )?;
 
         let source = Arc::new(CsvSource::new(true, b',', b'"'));
-        let config = partitioned_csv_config(file_schema, file_groups, source)
+        let config = partitioned_csv_config(file_schema, file_groups, source)?
             .with_newlines_in_values(false)
             .with_file_compression_type(file_compression_type.to_owned())
             .with_limit(Some(5));
@@ -291,7 +291,7 @@ mod tests {
         )?;
 
         let source = Arc::new(CsvSource::new(true, b',', b'"'));
-        let config = partitioned_csv_config(file_schema, file_groups, source)
+        let config = partitioned_csv_config(file_schema, file_groups, source)?
             .with_newlines_in_values(false)
             .with_file_compression_type(file_compression_type.to_owned())
             .with_limit(Some(5));
@@ -341,7 +341,7 @@ mod tests {
         )?;
 
         let source = Arc::new(CsvSource::new(true, b',', b'"'));
-        let mut config = partitioned_csv_config(file_schema, file_groups, source)
+        let mut config = partitioned_csv_config(file_schema, file_groups, source)?
             .with_newlines_in_values(false)
             .with_file_compression_type(file_compression_type.to_owned());
 
@@ -443,7 +443,7 @@ mod tests {
         .unwrap();
 
         let source = Arc::new(CsvSource::new(true, b',', b'"'));
-        let config = partitioned_csv_config(file_schema, file_groups, source)
+        let config = partitioned_csv_config(file_schema, file_groups, source)?
             .with_newlines_in_values(false)
             .with_file_compression_type(file_compression_type.to_owned());
         let csv = config.build();

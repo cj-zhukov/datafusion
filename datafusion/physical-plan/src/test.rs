@@ -40,6 +40,7 @@ use datafusion_common::{
     config::ConfigOptions, internal_err, project_schema, Result, Statistics,
 };
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{
     equivalence::ProjectionMapping, expressions::Column, utils::collect_columns,
     EquivalenceProperties, LexOrdering, Partitioning,
@@ -169,7 +170,7 @@ impl ExecutionPlan for TestMemoryExec {
         unimplemented!()
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         self.statistics()
     }
 
@@ -214,12 +215,12 @@ impl TestMemoryExec {
         )
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        Ok(common::compute_record_batch_statistics(
+    fn statistics(&self) -> Result<TableStatistics> {
+        common::compute_record_batch_statistics(
             &self.partitions,
             &self.schema,
             self.projection.clone(),
-        ))
+        )
     }
 
     pub fn try_new(

@@ -52,6 +52,7 @@ use datafusion_datasource::file::FileSource;
 use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
 use datafusion_expr::dml::InsertOp;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::PhysicalExpr;
 use datafusion_physical_expr_common::sort_expr::LexRequirement;
 use datafusion_physical_plan::insert::{DataSink, DataSinkExec};
@@ -164,8 +165,8 @@ impl FileFormat for ArrowFormat {
         _store: &Arc<dyn ObjectStore>,
         table_schema: SchemaRef,
         _object: &ObjectMeta,
-    ) -> Result<Statistics> {
-        Ok(Statistics::new_unknown(&table_schema))
+    ) -> Result<TableStatistics> {
+        TableStatistics::new_unknown(&table_schema)
     }
 
     async fn create_physical_plan(

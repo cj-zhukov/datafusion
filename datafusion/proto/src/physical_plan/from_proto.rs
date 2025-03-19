@@ -537,7 +537,7 @@ pub fn parse_protobuf_file_scan_config(
         output_ordering.push(sort_expr);
     }
 
-    let config = FileScanConfig::new(object_store_url, file_schema, file_source)
+    let config = FileScanConfig::new(object_store_url, file_schema, file_source)?
         .with_file_groups(file_groups)
         .with_constraints(constraints)
         .with_statistics(statistics)

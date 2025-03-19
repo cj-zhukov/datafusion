@@ -33,6 +33,7 @@ use crate::{DisplayFormatType, ExecutionPlan, Partitioning};
 
 use datafusion_common::{internal_err, Result};
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 
 /// Merge execution plan executes partitions in parallel and combines them into a single
 /// partition. No guarantees are made about the order of the resulting partition.
@@ -187,8 +188,9 @@ impl ExecutionPlan for CoalescePartitionsExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        Statistics::with_fetch(self.input.statistics()?, self.schema(), self.fetch, 0, 1)
+    fn statistics(&self) -> Result<TableStatistics> {
+        // Statistics::with_fetch(self.input.statistics()?, self.schema(), self.fetch, 0, 1)
+        todo!()
     }
 
     fn supports_limit_pushdown(&self) -> bool {

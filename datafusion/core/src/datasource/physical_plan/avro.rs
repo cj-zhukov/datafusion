@@ -80,7 +80,7 @@ mod tests {
 
         let source = Arc::new(AvroSource::new());
         let conf =
-            FileScanConfig::new(ObjectStoreUrl::local_filesystem(), file_schema, source)
+            FileScanConfig::new(ObjectStoreUrl::local_filesystem(), file_schema, source)?
                 .with_file(meta.into())
                 .with_projection(Some(vec![0, 1, 2]));
 
@@ -153,7 +153,7 @@ mod tests {
         let projection = Some(vec![0, 1, 2, actual_schema.fields().len()]);
 
         let source = Arc::new(AvroSource::new());
-        let conf = FileScanConfig::new(object_store_url, file_schema, source)
+        let conf = FileScanConfig::new(object_store_url, file_schema, source)?
             .with_file(meta.into())
             .with_projection(projection);
 
@@ -224,7 +224,7 @@ mod tests {
 
         let projection = Some(vec![0, 1, file_schema.fields().len(), 2]);
         let source = Arc::new(AvroSource::new());
-        let conf = FileScanConfig::new(object_store_url, file_schema, source)
+        let conf = FileScanConfig::new(object_store_url, file_schema, source)?
             // select specific columns of the files as well as the partitioning
             // column which is supposed to be the last column in the table schema.
             .with_projection(projection)

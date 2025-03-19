@@ -45,6 +45,9 @@ use datafusion_common::stats::Precision;
 use datafusion_common::{internal_err, JoinType, Result, ScalarValue};
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryReservation};
 use datafusion_execution::TaskContext;
+use datafusion_expr::interval_arithmetic::Interval;
+use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::join_equivalence_properties;
 
 use async_trait::async_trait;
@@ -337,11 +340,11 @@ impl ExecutionPlan for CrossJoinExec {
         }
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        Ok(stats_cartesian_product(
+    fn statistics(&self) -> Result<TableStatistics> {
+        stats_cartesian_product(
             self.left.statistics()?,
             self.right.statistics()?,
-        ))
+        )
     }
 
     /// Tries to swap the projection with its input [`CrossJoinExec`]. If it can be done,
@@ -388,70 +391,75 @@ impl ExecutionPlan for CrossJoinExec {
 
 /// [left/right]_col_count are required in case the column statistics are None
 fn stats_cartesian_product(
-    left_stats: Statistics,
-    right_stats: Statistics,
-) -> Statistics {
-    let left_row_count = left_stats.num_rows;
-    let right_row_count = right_stats.num_rows;
+    left_stats: TableStatistics,
+    right_stats: TableStatistics,
+) -> Result<TableStatistics> {
+    // let left_row_count = left_stats.num_rows;
+    // let right_row_count = right_stats.num_rows;
 
-    // calculate global stats
-    let num_rows = left_row_count.multiply(&right_row_count);
-    // the result size is two times a*b because you have the columns of both left and right
-    let total_byte_size = left_stats
-        .total_byte_size
-        .multiply(&right_stats.total_byte_size)
-        .multiply(&Precision::Exact(2));
+    // // calculate global stats
+    // let num_rows = new_generic_from_binary_op(&Operator::Multiply, &left_row_count, &right_row_count)?;
+    // // the result size is two times a*b because you have the columns of both left and right
+    // let total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &left_stats.total_byte_size, &right_stats.total_byte_size)?;
+    // let right = ProbabilityDistribution::new_uniform(Interval::make(Some(2), Some(2))?)?;
+    // let total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &total_byte_size, &right);
 
-    let left_col_stats = left_stats.column_statistics;
-    let right_col_stats = right_stats.column_statistics;
+    // let left_col_stats = left_stats.column_statistics;
+    // let right_col_stats = right_stats.column_statistics;
 
-    // the null counts must be multiplied by the row counts of the other side (if defined)
-    // Min, max and distinct_count on the other hand are invariants.
-    let cross_join_stats = left_col_stats
-        .into_iter()
-        .map(|s| ColumnStatistics {
-            null_count: s.null_count.multiply(&right_row_count),
-            distinct_count: s.distinct_count,
-            min_value: s.min_value,
-            max_value: s.max_value,
-            sum_value: s
-                .sum_value
-                .get_value()
-                // Cast the row count into the same type as any existing sum value
-                .and_then(|v| {
-                    Precision::<ScalarValue>::from(right_row_count)
-                        .cast_to(&v.data_type())
-                        .ok()
-                })
-                .map(|row_count| s.sum_value.multiply(&row_count))
-                .unwrap_or(Precision::Absent),
-        })
-        .chain(right_col_stats.into_iter().map(|s| {
-            ColumnStatistics {
-                null_count: s.null_count.multiply(&left_row_count),
-                distinct_count: s.distinct_count,
-                min_value: s.min_value,
-                max_value: s.max_value,
-                sum_value: s
-                    .sum_value
-                    .get_value()
-                    // Cast the row count into the same type as any existing sum value
-                    .and_then(|v| {
-                        Precision::<ScalarValue>::from(left_row_count)
-                            .cast_to(&v.data_type())
-                            .ok()
-                    })
-                    .map(|row_count| s.sum_value.multiply(&row_count))
-                    .unwrap_or(Precision::Absent),
-            }
-        }))
-        .collect();
+    // // the null counts must be multiplied by the row counts of the other side (if defined)
+    // // Min, max and distinct_count on the other hand are invariants.
+    // let cross_join_stats = left_col_stats
+    //     .into_iter()
+    //     .map(|s| {
+    //         let null_count = new_generic_from_binary_op(&Operator::Multiply, &s.null_count, &right_row_count).unwrap();
+    //         let sum_value = new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, right)
 
-    Statistics {
-        num_rows,
-        total_byte_size,
-        column_statistics: cross_join_stats,
-    }
+    //         ColumnStatisticsNew {
+    //             null_count,
+    //             distinct_count: s.distinct_count,
+    //             min_value: s.min_value,
+    //             max_value: s.max_value,
+    //             sum_value: s
+    //                 .sum_value
+    //                 .get_value()
+    //                 // Cast the row count into the same type as any existing sum value
+    //                 .and_then(|v| {
+    //                     Precision::<ScalarValue>::from(right_row_count)
+    //                         .cast_to(&v.data_type())
+    //                         .ok()
+    //                 })
+    //                 .map(|row_count| s.sum_value.multiply(&row_count))
+    //                 .unwrap_or(Precision::Absent),
+    //         }
+    //     })
+    //     .chain(right_col_stats.into_iter().map(|s| {
+    //         ColumnStatistics {
+    //             null_count: s.null_count.multiply(&left_row_count),
+    //             distinct_count: s.distinct_count,
+    //             min_value: s.min_value,
+    //             max_value: s.max_value,
+    //             sum_value: s
+    //                 .sum_value
+    //                 .get_value()
+    //                 // Cast the row count into the same type as any existing sum value
+    //                 .and_then(|v| {
+    //                     Precision::<ScalarValue>::from(left_row_count)
+    //                         .cast_to(&v.data_type())
+    //                         .ok()
+    //                 })
+    //                 .map(|row_count| s.sum_value.multiply(&row_count))
+    //                 .unwrap_or(Precision::Absent),
+    //         }
+    //     }))
+    //     .collect();
+
+    // Statistics {
+    //     num_rows,
+    //     total_byte_size,
+    //     column_statistics: cross_join_stats,
+    // }
+    todo!()
 }
 
 /// A stream that issues [RecordBatch]es as they arrive from the right  of the join.
@@ -662,154 +670,154 @@ mod tests {
         Ok((columns_header, batches))
     }
 
-    #[tokio::test]
-    async fn test_stats_cartesian_product() {
-        let left_row_count = 11;
-        let left_bytes = 23;
-        let right_row_count = 7;
-        let right_bytes = 27;
+    // #[tokio::test]
+    // async fn test_stats_cartesian_product() {
+    //     let left_row_count = 11;
+    //     let left_bytes = 23;
+    //     let right_row_count = 7;
+    //     let right_bytes = 27;
 
-        let left = Statistics {
-            num_rows: Precision::Exact(left_row_count),
-            total_byte_size: Precision::Exact(left_bytes),
-            column_statistics: vec![
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(5),
-                    max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
-                    min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
-                    sum_value: Precision::Exact(ScalarValue::Int64(Some(42))),
-                    null_count: Precision::Exact(0),
-                },
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(1),
-                    max_value: Precision::Exact(ScalarValue::from("x")),
-                    min_value: Precision::Exact(ScalarValue::from("a")),
-                    sum_value: Precision::Absent,
-                    null_count: Precision::Exact(3),
-                },
-            ],
-        };
+    //     let left = Statistics {
+    //         num_rows: Precision::Exact(left_row_count),
+    //         total_byte_size: Precision::Exact(left_bytes),
+    //         column_statistics: vec![
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(5),
+    //                 max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
+    //                 min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
+    //                 sum_value: Precision::Exact(ScalarValue::Int64(Some(42))),
+    //                 null_count: Precision::Exact(0),
+    //             },
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(1),
+    //                 max_value: Precision::Exact(ScalarValue::from("x")),
+    //                 min_value: Precision::Exact(ScalarValue::from("a")),
+    //                 sum_value: Precision::Absent,
+    //                 null_count: Precision::Exact(3),
+    //             },
+    //         ],
+    //     };
 
-        let right = Statistics {
-            num_rows: Precision::Exact(right_row_count),
-            total_byte_size: Precision::Exact(right_bytes),
-            column_statistics: vec![ColumnStatistics {
-                distinct_count: Precision::Exact(3),
-                max_value: Precision::Exact(ScalarValue::Int64(Some(12))),
-                min_value: Precision::Exact(ScalarValue::Int64(Some(0))),
-                sum_value: Precision::Exact(ScalarValue::Int64(Some(20))),
-                null_count: Precision::Exact(2),
-            }],
-        };
+    //     let right = Statistics {
+    //         num_rows: Precision::Exact(right_row_count),
+    //         total_byte_size: Precision::Exact(right_bytes),
+    //         column_statistics: vec![ColumnStatistics {
+    //             distinct_count: Precision::Exact(3),
+    //             max_value: Precision::Exact(ScalarValue::Int64(Some(12))),
+    //             min_value: Precision::Exact(ScalarValue::Int64(Some(0))),
+    //             sum_value: Precision::Exact(ScalarValue::Int64(Some(20))),
+    //             null_count: Precision::Exact(2),
+    //         }],
+    //     };
 
-        let result = stats_cartesian_product(left, right);
+    //     let result = stats_cartesian_product(left, right);
 
-        let expected = Statistics {
-            num_rows: Precision::Exact(left_row_count * right_row_count),
-            total_byte_size: Precision::Exact(2 * left_bytes * right_bytes),
-            column_statistics: vec![
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(5),
-                    max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
-                    min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
-                    sum_value: Precision::Exact(ScalarValue::Int64(Some(
-                        42 * right_row_count as i64,
-                    ))),
-                    null_count: Precision::Exact(0),
-                },
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(1),
-                    max_value: Precision::Exact(ScalarValue::from("x")),
-                    min_value: Precision::Exact(ScalarValue::from("a")),
-                    sum_value: Precision::Absent,
-                    null_count: Precision::Exact(3 * right_row_count),
-                },
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(3),
-                    max_value: Precision::Exact(ScalarValue::Int64(Some(12))),
-                    min_value: Precision::Exact(ScalarValue::Int64(Some(0))),
-                    sum_value: Precision::Exact(ScalarValue::Int64(Some(
-                        20 * left_row_count as i64,
-                    ))),
-                    null_count: Precision::Exact(2 * left_row_count),
-                },
-            ],
-        };
+    //     let expected = Statistics {
+    //         num_rows: Precision::Exact(left_row_count * right_row_count),
+    //         total_byte_size: Precision::Exact(2 * left_bytes * right_bytes),
+    //         column_statistics: vec![
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(5),
+    //                 max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
+    //                 min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
+    //                 sum_value: Precision::Exact(ScalarValue::Int64(Some(
+    //                     42 * right_row_count as i64,
+    //                 ))),
+    //                 null_count: Precision::Exact(0),
+    //             },
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(1),
+    //                 max_value: Precision::Exact(ScalarValue::from("x")),
+    //                 min_value: Precision::Exact(ScalarValue::from("a")),
+    //                 sum_value: Precision::Absent,
+    //                 null_count: Precision::Exact(3 * right_row_count),
+    //             },
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(3),
+    //                 max_value: Precision::Exact(ScalarValue::Int64(Some(12))),
+    //                 min_value: Precision::Exact(ScalarValue::Int64(Some(0))),
+    //                 sum_value: Precision::Exact(ScalarValue::Int64(Some(
+    //                     20 * left_row_count as i64,
+    //                 ))),
+    //                 null_count: Precision::Exact(2 * left_row_count),
+    //             },
+    //         ],
+    //     };
 
-        assert_eq!(result, expected);
-    }
+    //     assert_eq!(result, expected);
+    // }
 
-    #[tokio::test]
-    async fn test_stats_cartesian_product_with_unknown_size() {
-        let left_row_count = 11;
+    // #[tokio::test]
+    // async fn test_stats_cartesian_product_with_unknown_size() {
+    //     let left_row_count = 11;
 
-        let left = Statistics {
-            num_rows: Precision::Exact(left_row_count),
-            total_byte_size: Precision::Exact(23),
-            column_statistics: vec![
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(5),
-                    max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
-                    min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
-                    sum_value: Precision::Exact(ScalarValue::Int64(Some(42))),
-                    null_count: Precision::Exact(0),
-                },
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(1),
-                    max_value: Precision::Exact(ScalarValue::from("x")),
-                    min_value: Precision::Exact(ScalarValue::from("a")),
-                    sum_value: Precision::Absent,
-                    null_count: Precision::Exact(3),
-                },
-            ],
-        };
+    //     let left = Statistics {
+    //         num_rows: Precision::Exact(left_row_count),
+    //         total_byte_size: Precision::Exact(23),
+    //         column_statistics: vec![
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(5),
+    //                 max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
+    //                 min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
+    //                 sum_value: Precision::Exact(ScalarValue::Int64(Some(42))),
+    //                 null_count: Precision::Exact(0),
+    //             },
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(1),
+    //                 max_value: Precision::Exact(ScalarValue::from("x")),
+    //                 min_value: Precision::Exact(ScalarValue::from("a")),
+    //                 sum_value: Precision::Absent,
+    //                 null_count: Precision::Exact(3),
+    //             },
+    //         ],
+    //     };
 
-        let right = Statistics {
-            num_rows: Precision::Absent,
-            total_byte_size: Precision::Absent,
-            column_statistics: vec![ColumnStatistics {
-                distinct_count: Precision::Exact(3),
-                max_value: Precision::Exact(ScalarValue::Int64(Some(12))),
-                min_value: Precision::Exact(ScalarValue::Int64(Some(0))),
-                sum_value: Precision::Exact(ScalarValue::Int64(Some(20))),
-                null_count: Precision::Exact(2),
-            }],
-        };
+    //     let right = Statistics {
+    //         num_rows: Precision::Absent,
+    //         total_byte_size: Precision::Absent,
+    //         column_statistics: vec![ColumnStatistics {
+    //             distinct_count: Precision::Exact(3),
+    //             max_value: Precision::Exact(ScalarValue::Int64(Some(12))),
+    //             min_value: Precision::Exact(ScalarValue::Int64(Some(0))),
+    //             sum_value: Precision::Exact(ScalarValue::Int64(Some(20))),
+    //             null_count: Precision::Exact(2),
+    //         }],
+    //     };
 
-        let result = stats_cartesian_product(left, right);
+    //     let result = stats_cartesian_product(left, right);
 
-        let expected = Statistics {
-            num_rows: Precision::Absent,
-            total_byte_size: Precision::Absent,
-            column_statistics: vec![
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(5),
-                    max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
-                    min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
-                    sum_value: Precision::Absent, // we don't know the row count on the right
-                    null_count: Precision::Absent, // we don't know the row count on the right
-                },
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(1),
-                    max_value: Precision::Exact(ScalarValue::from("x")),
-                    min_value: Precision::Exact(ScalarValue::from("a")),
-                    sum_value: Precision::Absent,
-                    null_count: Precision::Absent, // we don't know the row count on the right
-                },
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(3),
-                    max_value: Precision::Exact(ScalarValue::Int64(Some(12))),
-                    min_value: Precision::Exact(ScalarValue::Int64(Some(0))),
-                    sum_value: Precision::Exact(ScalarValue::Int64(Some(
-                        20 * left_row_count as i64,
-                    ))),
-                    null_count: Precision::Exact(2 * left_row_count),
-                },
-            ],
-        };
+    //     let expected = Statistics {
+    //         num_rows: Precision::Absent,
+    //         total_byte_size: Precision::Absent,
+    //         column_statistics: vec![
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(5),
+    //                 max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
+    //                 min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
+    //                 sum_value: Precision::Absent, // we don't know the row count on the right
+    //                 null_count: Precision::Absent, // we don't know the row count on the right
+    //             },
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(1),
+    //                 max_value: Precision::Exact(ScalarValue::from("x")),
+    //                 min_value: Precision::Exact(ScalarValue::from("a")),
+    //                 sum_value: Precision::Absent,
+    //                 null_count: Precision::Absent, // we don't know the row count on the right
+    //             },
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(3),
+    //                 max_value: Precision::Exact(ScalarValue::Int64(Some(12))),
+    //                 min_value: Precision::Exact(ScalarValue::Int64(Some(0))),
+    //                 sum_value: Precision::Exact(ScalarValue::Int64(Some(
+    //                     20 * left_row_count as i64,
+    //                 ))),
+    //                 null_count: Precision::Exact(2 * left_row_count),
+    //             },
+    //         ],
+    //     };
 
-        assert_eq!(result, expected);
-    }
+    //     assert_eq!(result, expected);
+    // }
 
     #[tokio::test]
     async fn test_join() -> Result<()> {

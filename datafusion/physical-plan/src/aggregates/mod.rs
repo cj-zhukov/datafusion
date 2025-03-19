@@ -37,10 +37,13 @@ use crate::{
 use arrow::array::{ArrayRef, UInt16Array, UInt32Array, UInt64Array, UInt8Array};
 use arrow::datatypes::{Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
+use arrow_schema::DataType;
 use datafusion_common::stats::Precision;
-use datafusion_common::{internal_err, not_impl_err, Constraint, Constraints, Result};
+use datafusion_common::{internal_err, not_impl_err, Constraint, Constraints, Result, ScalarValue};
 use datafusion_execution::TaskContext;
-use datafusion_expr::{Accumulator, Aggregate};
+use datafusion_expr::interval_arithmetic::Interval;
+use datafusion_expr::statistics::{new_generic_from_binary_op, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::{Accumulator, Aggregate, Operator};
 use datafusion_physical_expr::aggregate::AggregateFunctionExpr;
 use datafusion_physical_expr::{
     equivalence::ProjectionMapping, expressions::Column, physical_exprs_contains,
@@ -926,48 +929,44 @@ impl ExecutionPlan for AggregateExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         // TODO stats: group expressions:
         // - once expressions will be able to compute their own stats, use it here
         // - case where we group by on a column for which with have the `distinct` stat
         // TODO stats: aggr expression:
         // - aggregations sometimes also preserve invariants such as min, max...
-        let column_statistics = Statistics::unknown_column(&self.schema());
+        let column_statistics = TableStatistics::unknown_column(&self.schema())?;
         match self.mode {
             AggregateMode::Final | AggregateMode::FinalPartitioned
                 if self.group_by.expr.is_empty() =>
             {
-                Ok(Statistics {
-                    num_rows: Precision::Exact(1),
+                let num_rows = ProbabilityDistribution::new_uniform(Interval::make(Some(1), Some(1))?)?;
+                let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+                Ok(TableStatistics {
+                    num_rows,
                     column_statistics,
-                    total_byte_size: Precision::Absent,
+                    total_byte_size,
                 })
             }
             _ => {
                 // When the input row count is 0 or 1, we can adopt that statistic keeping its reliability.
                 // When it is larger than 1, we degrade the precision since it may decrease after aggregation.
-                let num_rows = if let Some(value) =
-                    self.input().statistics()?.num_rows.get_value()
-                {
-                    if *value > 1 {
-                        self.input().statistics()?.num_rows.to_inexact()
-                    } else if *value == 0 {
-                        // Aggregation on an empty table creates a null row.
-                        self.input()
-                            .statistics()?
-                            .num_rows
-                            .add(&Precision::Exact(1))
-                    } else {
-                        // num_rows = 1 case
-                        self.input().statistics()?.num_rows
-                    }
+                let num_rows = self.input().statistics()?.num_rows;
+                let num_rows = if num_rows.as_ref() > &ScalarValue::new_one(&DataType::UInt64)? {
+                    self.input().statistics()?.num_rows.to_inexact()?
+                } else if num_rows.as_ref() == &ScalarValue::new_zero(&DataType::UInt64)? {
+                    let n_rows = self.input().statistics()?.num_rows;
+                    let to_add = ProbabilityDistribution::new_uniform(Interval::make(Some(1), Some(1))?)?;
+                    self.input().statistics()?.num_rows = new_generic_from_binary_op(&Operator::Plus, &n_rows, &to_add)?;
+                    self.input().statistics()?.num_rows
                 } else {
-                    Precision::Absent
+                    self.input().statistics()?.num_rows
                 };
-                Ok(Statistics {
+                let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+                Ok(TableStatistics {
                     num_rows,
                     column_statistics,
-                    total_byte_size: Precision::Absent,
+                    total_byte_size,
                 })
             }
         }
@@ -1895,13 +1894,13 @@ mod tests {
             Ok(Box::pin(stream))
         }
 
-        fn statistics(&self) -> Result<Statistics> {
+        fn statistics(&self) -> Result<TableStatistics> {
             let (_, batches) = some_data();
-            Ok(common::compute_record_batch_statistics(
+            common::compute_record_batch_statistics(
                 &[batches],
                 &self.schema(),
                 None,
-            ))
+            )
         }
     }
 

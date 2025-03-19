@@ -33,6 +33,7 @@ use arrow::record_batch::RecordBatch;
 use datafusion_common::{internal_datafusion_err, internal_err, Result};
 use datafusion_execution::memory_pool::MemoryReservation;
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{EquivalenceProperties, Partitioning};
 
 /// A vector of record batches with a memory reservation.
@@ -224,8 +225,8 @@ impl ExecutionPlan for WorkTableExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        Ok(Statistics::new_unknown(&self.schema()))
+    fn statistics(&self) -> Result<TableStatistics> {
+        TableStatistics::new_unknown(&self.schema())
     }
 }
 

@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use datafusion_common::{Result, Statistics};
+use datafusion_common::Result;
 use datafusion_datasource::file_compression_type::FileCompressionType;
 use datafusion_datasource::file_format::{FileFormat, FileFormatFactory};
 
@@ -36,6 +36,7 @@ use datafusion_common::GetExt;
 use datafusion_common::DEFAULT_AVRO_EXTENSION;
 use datafusion_datasource::file::FileSource;
 use datafusion_datasource::file_scan_config::FileScanConfig;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::PhysicalExpr;
 use datafusion_physical_plan::ExecutionPlan;
 use object_store::{GetResultPayload, ObjectMeta, ObjectStore};
@@ -141,8 +142,8 @@ impl FileFormat for AvroFormat {
         _store: &Arc<dyn ObjectStore>,
         table_schema: SchemaRef,
         _object: &ObjectMeta,
-    ) -> Result<Statistics> {
-        Ok(Statistics::new_unknown(&table_schema))
+    ) -> Result<TableStatistics> {
+        TableStatistics::new_unknown(&table_schema)
     }
 
     async fn create_physical_plan(

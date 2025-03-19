@@ -42,6 +42,7 @@ use datafusion_datasource::schema_adapter::SchemaAdapterFactory;
 use datafusion_datasource::source::DataSourceExec;
 use datafusion_datasource::PartitionedFile;
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{
     EquivalenceProperties, LexOrdering, Partitioning, PhysicalExpr,
 };
@@ -522,7 +523,7 @@ impl ExecutionPlan for ParquetExec {
     fn metrics(&self) -> Option<MetricsSet> {
         self.inner.metrics()
     }
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         self.inner.statistics()
     }
     fn fetch(&self) -> Option<usize> {

@@ -46,6 +46,7 @@ use arrow::{
     datatypes::SchemaRef,
     record_batch::RecordBatch,
 };
+use arrow_schema::DataType;
 use datafusion_common::hash_utils::create_hashes;
 use datafusion_common::stats::Precision;
 use datafusion_common::utils::{
@@ -55,6 +56,7 @@ use datafusion_common::{
     arrow_datafusion_err, exec_err, DataFusionError, HashMap, Result,
 };
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::window_state::{PartitionBatchState, WindowAggState};
 use datafusion_expr::ColumnarValue;
 use datafusion_physical_expr::window::{
@@ -342,7 +344,7 @@ impl ExecutionPlan for BoundedWindowAggExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         let input_stat = self.input.statistics()?;
         let win_cols = self.window_expr.len();
         let input_cols = self.input.schema().fields().len();
@@ -351,12 +353,13 @@ impl ExecutionPlan for BoundedWindowAggExec {
         // copy stats of the input to the beginning of the schema.
         column_statistics.extend(input_stat.column_statistics);
         for _ in 0..win_cols {
-            column_statistics.push(ColumnStatistics::new_unknown())
+            column_statistics.push(ColumnStatisticsNew::new_unknown()?)
         }
-        Ok(Statistics {
+        let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+        Ok(TableStatistics {
             num_rows: input_stat.num_rows,
             column_statistics,
-            total_byte_size: Precision::Absent,
+            total_byte_size,
         })
     }
 }

@@ -30,7 +30,7 @@ use crate::PhysicalOptimizerRule;
 use datafusion_common::config::ConfigOptions;
 use datafusion_common::error::Result;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
-use datafusion_common::{internal_err, JoinSide, JoinType};
+use datafusion_common::{internal_err, JoinSide, JoinType, ScalarValue};
 use datafusion_expr_common::sort_properties::SortProperties;
 use datafusion_physical_expr::expressions::Column;
 use datafusion_physical_expr::LexOrdering;
@@ -70,17 +70,19 @@ pub(crate) fn should_swap_join_order(
     // First compare `total_byte_size` of left and right side,
     // if information in this field is insufficient fallback to the `num_rows`
     match (
-        left_stats.total_byte_size.get_value(),
-        right_stats.total_byte_size.get_value(),
+        left_stats.total_byte_size.as_ref(),
+        right_stats.total_byte_size.as_ref(),
     ) {
-        (Some(l), Some(r)) => Ok(l > r),
-        _ => match (
-            left_stats.num_rows.get_value(),
-            right_stats.num_rows.get_value(),
+        (&ScalarValue::Null, &ScalarValue::Null) => match (
+            left_stats.num_rows.as_ref(),
+            right_stats.num_rows.as_ref(),
         ) {
-            (Some(l), Some(r)) => Ok(l > r),
-            _ => Ok(false),
+            (&ScalarValue::Null, &ScalarValue::Null) => Ok(false),
+            _ => Ok(true)
         },
+        _ => {
+            Ok(left_stats.total_byte_size.as_ref() > right_stats.total_byte_size.as_ref())
+        }
     }
 }
 
@@ -95,10 +97,14 @@ fn supports_collect_by_thresholds(
         return false;
     };
 
-    if let Some(byte_size) = stats.total_byte_size.get_value() {
-        *byte_size != 0 && *byte_size < threshold_byte_size
-    } else if let Some(num_rows) = stats.num_rows.get_value() {
-        *num_rows != 0 && *num_rows < threshold_num_rows
+    let byte_size = stats.total_byte_size.as_ref();
+    let threshold_byte_size= ScalarValue::try_from(threshold_byte_size as u64).unwrap_or(ScalarValue::Null);
+    let num_rows = stats.num_rows.as_ref();
+    let threshold_num_rows = ScalarValue::try_from(threshold_num_rows as u64).unwrap_or(ScalarValue::Null);
+    if byte_size.is_null() {
+        *byte_size < threshold_byte_size
+    } else if num_rows.is_null() {
+       *num_rows < threshold_num_rows
     } else {
         false
     }

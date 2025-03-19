@@ -33,7 +33,7 @@ use datafusion_catalog::Session;
 use datafusion_common::config::{ConfigField, ConfigFileType, JsonOptions};
 use datafusion_common::file_options::json_writer::JsonWriterOptions;
 use datafusion_common::{
-    not_impl_err, GetExt, Result, Statistics, DEFAULT_JSON_EXTENSION,
+    not_impl_err, GetExt, Result, DEFAULT_JSON_EXTENSION,
 };
 use datafusion_common_runtime::SpawnedTask;
 use datafusion_datasource::decoder::Decoder;
@@ -50,6 +50,7 @@ use datafusion_datasource::write::orchestration::spawn_writer_tasks_and_join;
 use datafusion_datasource::write::BatchSerializer;
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
 use datafusion_expr::dml::InsertOp;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::PhysicalExpr;
 use datafusion_physical_plan::insert::{DataSink, DataSinkExec};
 use datafusion_physical_plan::{DisplayAs, DisplayFormatType, ExecutionPlan};
@@ -239,8 +240,8 @@ impl FileFormat for JsonFormat {
         _store: &Arc<dyn ObjectStore>,
         table_schema: SchemaRef,
         _object: &ObjectMeta,
-    ) -> Result<Statistics> {
-        Ok(Statistics::new_unknown(&table_schema))
+    ) -> Result<TableStatistics> {
+        TableStatistics::new_unknown(&table_schema)
     }
 
     async fn create_physical_plan(

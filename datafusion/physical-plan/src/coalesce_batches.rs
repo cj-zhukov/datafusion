@@ -32,6 +32,7 @@ use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
 use datafusion_common::Result;
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::{ProbabilityDistribution, TableStatistics};
 
 use crate::coalesce::{BatchCoalescer, CoalescerState};
 use crate::execution_plan::CardinalityEffect;
@@ -188,8 +189,9 @@ impl ExecutionPlan for CoalesceBatchesExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        Statistics::with_fetch(self.input.statistics()?, self.schema(), self.fetch, 0, 1)
+    fn statistics(&self) -> Result<TableStatistics> {
+        // Statistics::with_fetch(self.input.statistics()?, self.schema(), self.fetch, 0, 1)
+        todo!()
     }
 
     fn with_fetch(&self, limit: Option<usize>) -> Option<Arc<dyn ExecutionPlan>> {

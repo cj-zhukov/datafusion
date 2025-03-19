@@ -70,6 +70,7 @@ use arrow::record_batch::RecordBatch;
 use datafusion_common::utils::evaluate_partition_ranges;
 use datafusion_common::Result;
 use datafusion_execution::{RecordBatchStream, TaskContext};
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::LexOrdering;
 
 use futures::{ready, Stream, StreamExt};
@@ -320,7 +321,7 @@ impl ExecutionPlan for PartialSortExec {
         Some(self.metrics_set.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         self.input.statistics()
     }
 }

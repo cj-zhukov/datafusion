@@ -34,6 +34,7 @@ use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_datasource::source::DataSourceExec;
 use datafusion_datasource_json::source::JsonSource;
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{EquivalenceProperties, Partitioning};
 use datafusion_physical_expr_common::sort_expr::LexOrdering;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
@@ -187,7 +188,7 @@ impl ExecutionPlan for ArrowExec {
     fn metrics(&self) -> Option<MetricsSet> {
         self.inner.metrics()
     }
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         self.inner.statistics()
     }
     fn fetch(&self) -> Option<usize> {
@@ -204,7 +205,7 @@ impl ExecutionPlan for ArrowExec {
 #[derive(Clone, Default)]
 pub struct ArrowSource {
     metrics: ExecutionPlanMetricsSet,
-    projected_statistics: Option<Statistics>,
+    projected_statistics: Option<TableStatistics>,
 }
 
 impl FileSource for ArrowSource {
@@ -231,7 +232,8 @@ impl FileSource for ArrowSource {
     fn with_schema(&self, _schema: SchemaRef) -> Arc<dyn FileSource> {
         Arc::new(Self { ..self.clone() })
     }
-    fn with_statistics(&self, statistics: Statistics) -> Arc<dyn FileSource> {
+
+    fn with_statistics(&self, statistics: TableStatistics) -> Arc<dyn FileSource> {
         let mut conf = self.clone();
         conf.projected_statistics = Some(statistics);
         Arc::new(conf)
@@ -245,7 +247,7 @@ impl FileSource for ArrowSource {
         &self.metrics
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         let statistics = &self.projected_statistics;
         Ok(statistics
             .clone()

@@ -348,7 +348,7 @@ impl TestFull {
         } else {
             Arc::new(ParquetSource::default())
         };
-        let config = FileScanConfig::new(object_store_url, schema.clone(), source)
+        let config = FileScanConfig::new(object_store_url, schema.clone(), source)?
             .with_file(partitioned_file);
 
         let plan: Arc<dyn ExecutionPlan> = config.build();

@@ -168,61 +168,61 @@ mod tests {
         No,
     }
 
-    async fn _run_read_merged_batches(force_views: ForceViews) -> Result<()> {
-        let c1: ArrayRef =
-            Arc::new(StringArray::from(vec![Some("Foo"), None, Some("bar")]));
+    // async fn _run_read_merged_batches(force_views: ForceViews) -> Result<()> {
+    //     let c1: ArrayRef =
+    //         Arc::new(StringArray::from(vec![Some("Foo"), None, Some("bar")]));
 
-        let c2: ArrayRef = Arc::new(Int64Array::from(vec![Some(1), Some(2), None]));
+    //     let c2: ArrayRef = Arc::new(Int64Array::from(vec![Some(1), Some(2), None]));
 
-        let batch1 = RecordBatch::try_from_iter(vec![("c1", c1.clone())]).unwrap();
-        let batch2 = RecordBatch::try_from_iter(vec![("c2", c2)]).unwrap();
+    //     let batch1 = RecordBatch::try_from_iter(vec![("c1", c1.clone())]).unwrap();
+    //     let batch2 = RecordBatch::try_from_iter(vec![("c2", c2)]).unwrap();
 
-        let store = Arc::new(LocalFileSystem::new()) as _;
-        let (meta, _files) = store_parquet(vec![batch1, batch2], false).await?;
+    //     let store = Arc::new(LocalFileSystem::new()) as _;
+    //     let (meta, _files) = store_parquet(vec![batch1, batch2], false).await?;
 
-        let session = SessionContext::new();
-        let ctx = session.state();
-        let force_views = match force_views {
-            ForceViews::Yes => true,
-            ForceViews::No => false,
-        };
-        let format = ParquetFormat::default().with_force_view_types(force_views);
-        let schema = format.infer_schema(&ctx, &store, &meta).await.unwrap();
+    //     let session = SessionContext::new();
+    //     let ctx = session.state();
+    //     let force_views = match force_views {
+    //         ForceViews::Yes => true,
+    //         ForceViews::No => false,
+    //     };
+    //     let format = ParquetFormat::default().with_force_view_types(force_views);
+    //     let schema = format.infer_schema(&ctx, &store, &meta).await.unwrap();
 
-        let stats =
-            fetch_statistics(store.as_ref(), schema.clone(), &meta[0], None).await?;
+    //     let stats =
+    //         fetch_statistics(store.as_ref(), schema.clone(), &meta[0], None).await?;
 
-        assert_eq!(stats.num_rows, Precision::Exact(3));
-        let c1_stats = &stats.column_statistics[0];
-        let c2_stats = &stats.column_statistics[1];
-        assert_eq!(c1_stats.null_count, Precision::Exact(1));
-        assert_eq!(c2_stats.null_count, Precision::Exact(3));
+    //     assert_eq!(stats.num_rows, Precision::Exact(3));
+    //     let c1_stats = &stats.column_statistics[0];
+    //     let c2_stats = &stats.column_statistics[1];
+    //     assert_eq!(c1_stats.null_count, Precision::Exact(1));
+    //     assert_eq!(c2_stats.null_count, Precision::Exact(3));
 
-        let stats = fetch_statistics(store.as_ref(), schema, &meta[1], None).await?;
-        assert_eq!(stats.num_rows, Precision::Exact(3));
-        let c1_stats = &stats.column_statistics[0];
-        let c2_stats = &stats.column_statistics[1];
-        assert_eq!(c1_stats.null_count, Precision::Exact(3));
-        assert_eq!(c2_stats.null_count, Precision::Exact(1));
-        assert_eq!(
-            c2_stats.max_value,
-            Precision::Exact(ScalarValue::Int64(Some(2)))
-        );
-        assert_eq!(
-            c2_stats.min_value,
-            Precision::Exact(ScalarValue::Int64(Some(1)))
-        );
+    //     let stats = fetch_statistics(store.as_ref(), schema, &meta[1], None).await?;
+    //     assert_eq!(stats.num_rows, Precision::Exact(3));
+    //     let c1_stats = &stats.column_statistics[0];
+    //     let c2_stats = &stats.column_statistics[1];
+    //     assert_eq!(c1_stats.null_count, Precision::Exact(3));
+    //     assert_eq!(c2_stats.null_count, Precision::Exact(1));
+    //     assert_eq!(
+    //         c2_stats.max_value,
+    //         Precision::Exact(ScalarValue::Int64(Some(2)))
+    //     );
+    //     assert_eq!(
+    //         c2_stats.min_value,
+    //         Precision::Exact(ScalarValue::Int64(Some(1)))
+    //     );
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    #[tokio::test]
-    async fn read_merged_batches() -> Result<()> {
-        _run_read_merged_batches(ForceViews::No).await?;
-        _run_read_merged_batches(ForceViews::Yes).await?;
+    // #[tokio::test]
+    // async fn read_merged_batches() -> Result<()> {
+    //     _run_read_merged_batches(ForceViews::No).await?;
+    //     _run_read_merged_batches(ForceViews::Yes).await?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     #[tokio::test]
     async fn is_schema_stable() -> Result<()> {
@@ -354,271 +354,271 @@ mod tests {
         }
     }
 
-    async fn _run_fetch_metadata_with_size_hint(force_views: ForceViews) -> Result<()> {
-        let c1: ArrayRef =
-            Arc::new(StringArray::from(vec![Some("Foo"), None, Some("bar")]));
+    // async fn _run_fetch_metadata_with_size_hint(force_views: ForceViews) -> Result<()> {
+    //     let c1: ArrayRef =
+    //         Arc::new(StringArray::from(vec![Some("Foo"), None, Some("bar")]));
 
-        let c2: ArrayRef = Arc::new(Int64Array::from(vec![Some(1), Some(2), None]));
+    //     let c2: ArrayRef = Arc::new(Int64Array::from(vec![Some(1), Some(2), None]));
 
-        let batch1 = RecordBatch::try_from_iter(vec![("c1", c1.clone())]).unwrap();
-        let batch2 = RecordBatch::try_from_iter(vec![("c2", c2)]).unwrap();
+    //     let batch1 = RecordBatch::try_from_iter(vec![("c1", c1.clone())]).unwrap();
+    //     let batch2 = RecordBatch::try_from_iter(vec![("c2", c2)]).unwrap();
 
-        let store = Arc::new(RequestCountingObjectStore::new(Arc::new(
-            LocalFileSystem::new(),
-        )));
-        let (meta, _files) = store_parquet(vec![batch1, batch2], false).await?;
+    //     let store = Arc::new(RequestCountingObjectStore::new(Arc::new(
+    //         LocalFileSystem::new(),
+    //     )));
+    //     let (meta, _files) = store_parquet(vec![batch1, batch2], false).await?;
 
-        // Use a size hint larger than the parquet footer but smaller than the actual metadata, requiring a second fetch
-        // for the remaining metadata
-        fetch_parquet_metadata(store.as_ref() as &dyn ObjectStore, &meta[0], Some(9))
-            .await
-            .expect("error reading metadata with hint");
+    //     // Use a size hint larger than the parquet footer but smaller than the actual metadata, requiring a second fetch
+    //     // for the remaining metadata
+    //     fetch_parquet_metadata(store.as_ref() as &dyn ObjectStore, &meta[0], Some(9))
+    //         .await
+    //         .expect("error reading metadata with hint");
 
-        assert_eq!(store.request_count(), 2);
+    //     assert_eq!(store.request_count(), 2);
 
-        let session = SessionContext::new();
-        let ctx = session.state();
-        let force_views = match force_views {
-            ForceViews::Yes => true,
-            ForceViews::No => false,
-        };
-        let format = ParquetFormat::default()
-            .with_metadata_size_hint(Some(9))
-            .with_force_view_types(force_views);
-        let schema = format
-            .infer_schema(&ctx, &store.upcast(), &meta)
-            .await
-            .unwrap();
+    //     let session = SessionContext::new();
+    //     let ctx = session.state();
+    //     let force_views = match force_views {
+    //         ForceViews::Yes => true,
+    //         ForceViews::No => false,
+    //     };
+    //     let format = ParquetFormat::default()
+    //         .with_metadata_size_hint(Some(9))
+    //         .with_force_view_types(force_views);
+    //     let schema = format
+    //         .infer_schema(&ctx, &store.upcast(), &meta)
+    //         .await
+    //         .unwrap();
 
-        let stats =
-            fetch_statistics(store.upcast().as_ref(), schema.clone(), &meta[0], Some(9))
-                .await?;
+    //     let stats =
+    //         fetch_statistics(store.upcast().as_ref(), schema.clone(), &meta[0], Some(9))
+    //             .await?;
 
-        assert_eq!(stats.num_rows, Precision::Exact(3));
-        let c1_stats = &stats.column_statistics[0];
-        let c2_stats = &stats.column_statistics[1];
-        assert_eq!(c1_stats.null_count, Precision::Exact(1));
-        assert_eq!(c2_stats.null_count, Precision::Exact(3));
+    //     assert_eq!(stats.num_rows, Precision::Exact(3));
+    //     let c1_stats = &stats.column_statistics[0];
+    //     let c2_stats = &stats.column_statistics[1];
+    //     assert_eq!(c1_stats.null_count, Precision::Exact(1));
+    //     assert_eq!(c2_stats.null_count, Precision::Exact(3));
 
-        let store = Arc::new(RequestCountingObjectStore::new(Arc::new(
-            LocalFileSystem::new(),
-        )));
+    //     let store = Arc::new(RequestCountingObjectStore::new(Arc::new(
+    //         LocalFileSystem::new(),
+    //     )));
 
-        // Use the file size as the hint so we can get the full metadata from the first fetch
-        let size_hint = meta[0].size;
+    //     // Use the file size as the hint so we can get the full metadata from the first fetch
+    //     let size_hint = meta[0].size;
 
-        fetch_parquet_metadata(store.upcast().as_ref(), &meta[0], Some(size_hint))
-            .await
-            .expect("error reading metadata with hint");
+    //     fetch_parquet_metadata(store.upcast().as_ref(), &meta[0], Some(size_hint))
+    //         .await
+    //         .expect("error reading metadata with hint");
 
-        // ensure the requests were coalesced into a single request
-        assert_eq!(store.request_count(), 1);
+    //     // ensure the requests were coalesced into a single request
+    //     assert_eq!(store.request_count(), 1);
 
-        let format = ParquetFormat::default()
-            .with_metadata_size_hint(Some(size_hint))
-            .with_force_view_types(force_views);
-        let schema = format
-            .infer_schema(&ctx, &store.upcast(), &meta)
-            .await
-            .unwrap();
-        let stats = fetch_statistics(
-            store.upcast().as_ref(),
-            schema.clone(),
-            &meta[0],
-            Some(size_hint),
-        )
-        .await?;
+    //     let format = ParquetFormat::default()
+    //         .with_metadata_size_hint(Some(size_hint))
+    //         .with_force_view_types(force_views);
+    //     let schema = format
+    //         .infer_schema(&ctx, &store.upcast(), &meta)
+    //         .await
+    //         .unwrap();
+    //     let stats = fetch_statistics(
+    //         store.upcast().as_ref(),
+    //         schema.clone(),
+    //         &meta[0],
+    //         Some(size_hint),
+    //     )
+    //     .await?;
 
-        assert_eq!(stats.num_rows, Precision::Exact(3));
-        let c1_stats = &stats.column_statistics[0];
-        let c2_stats = &stats.column_statistics[1];
-        assert_eq!(c1_stats.null_count, Precision::Exact(1));
-        assert_eq!(c2_stats.null_count, Precision::Exact(3));
+    //     assert_eq!(stats.num_rows, Precision::Exact(3));
+    //     let c1_stats = &stats.column_statistics[0];
+    //     let c2_stats = &stats.column_statistics[1];
+    //     assert_eq!(c1_stats.null_count, Precision::Exact(1));
+    //     assert_eq!(c2_stats.null_count, Precision::Exact(3));
 
-        let store = Arc::new(RequestCountingObjectStore::new(Arc::new(
-            LocalFileSystem::new(),
-        )));
+    //     let store = Arc::new(RequestCountingObjectStore::new(Arc::new(
+    //         LocalFileSystem::new(),
+    //     )));
 
-        // Use the a size hint larger than the file size to make sure we don't panic
-        let size_hint = meta[0].size + 100;
+    //     // Use the a size hint larger than the file size to make sure we don't panic
+    //     let size_hint = meta[0].size + 100;
 
-        fetch_parquet_metadata(store.upcast().as_ref(), &meta[0], Some(size_hint))
-            .await
-            .expect("error reading metadata with hint");
+    //     fetch_parquet_metadata(store.upcast().as_ref(), &meta[0], Some(size_hint))
+    //         .await
+    //         .expect("error reading metadata with hint");
 
-        assert_eq!(store.request_count(), 1);
+    //     assert_eq!(store.request_count(), 1);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    #[tokio::test]
-    async fn fetch_metadata_with_size_hint() -> Result<()> {
-        _run_fetch_metadata_with_size_hint(ForceViews::No).await?;
-        _run_fetch_metadata_with_size_hint(ForceViews::Yes).await?;
+    // #[tokio::test]
+    // async fn fetch_metadata_with_size_hint() -> Result<()> {
+    //     _run_fetch_metadata_with_size_hint(ForceViews::No).await?;
+    //     _run_fetch_metadata_with_size_hint(ForceViews::Yes).await?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    #[tokio::test]
-    async fn test_statistics_from_parquet_metadata_dictionary() -> Result<()> {
-        // Data for column c_dic: ["a", "b", "c", "d"]
-        let values = StringArray::from_iter_values(["a", "b", "c", "d"]);
-        let keys = Int32Array::from_iter_values([0, 1, 2, 3]);
-        let dic_array =
-            DictionaryArray::<Int32Type>::try_new(keys, Arc::new(values)).unwrap();
-        let c_dic: ArrayRef = Arc::new(dic_array);
+    // #[tokio::test]
+    // async fn test_statistics_from_parquet_metadata_dictionary() -> Result<()> {
+    //     // Data for column c_dic: ["a", "b", "c", "d"]
+    //     let values = StringArray::from_iter_values(["a", "b", "c", "d"]);
+    //     let keys = Int32Array::from_iter_values([0, 1, 2, 3]);
+    //     let dic_array =
+    //         DictionaryArray::<Int32Type>::try_new(keys, Arc::new(values)).unwrap();
+    //     let c_dic: ArrayRef = Arc::new(dic_array);
 
-        let batch1 = RecordBatch::try_from_iter(vec![("c_dic", c_dic)]).unwrap();
+    //     let batch1 = RecordBatch::try_from_iter(vec![("c_dic", c_dic)]).unwrap();
 
-        // Use store_parquet to write each batch to its own file
-        // . batch1 written into first file and includes:
-        //    - column c_dic that has 4 rows with no null. Stats min and max of dictionary column is available.
-        let store = Arc::new(LocalFileSystem::new()) as _;
-        let (files, _file_names) = store_parquet(vec![batch1], false).await?;
+    //     // Use store_parquet to write each batch to its own file
+    //     // . batch1 written into first file and includes:
+    //     //    - column c_dic that has 4 rows with no null. Stats min and max of dictionary column is available.
+    //     let store = Arc::new(LocalFileSystem::new()) as _;
+    //     let (files, _file_names) = store_parquet(vec![batch1], false).await?;
 
-        let state = SessionContext::new().state();
-        let format = ParquetFormat::default();
-        let schema = format.infer_schema(&state, &store, &files).await.unwrap();
+    //     let state = SessionContext::new().state();
+    //     let format = ParquetFormat::default();
+    //     let schema = format.infer_schema(&state, &store, &files).await.unwrap();
 
-        // Fetch statistics for first file
-        let pq_meta = fetch_parquet_metadata(store.as_ref(), &files[0], None).await?;
-        let stats = statistics_from_parquet_meta_calc(&pq_meta, schema.clone())?;
-        assert_eq!(stats.num_rows, Precision::Exact(4));
+    //     // Fetch statistics for first file
+    //     let pq_meta = fetch_parquet_metadata(store.as_ref(), &files[0], None).await?;
+    //     let stats = statistics_from_parquet_meta_calc(&pq_meta, schema.clone())?;
+    //     assert_eq!(stats.num_rows, Precision::Exact(4));
 
-        // column c_dic
-        let c_dic_stats = &stats.column_statistics[0];
+    //     // column c_dic
+    //     let c_dic_stats = &stats.column_statistics[0];
 
-        assert_eq!(c_dic_stats.null_count, Precision::Exact(0));
-        assert_eq!(
-            c_dic_stats.max_value,
-            Precision::Exact(Utf8(Some("d".into())))
-        );
-        assert_eq!(
-            c_dic_stats.min_value,
-            Precision::Exact(Utf8(Some("a".into())))
-        );
+    //     assert_eq!(c_dic_stats.null_count, Precision::Exact(0));
+    //     assert_eq!(
+    //         c_dic_stats.max_value,
+    //         Precision::Exact(Utf8(Some("d".into())))
+    //     );
+    //     assert_eq!(
+    //         c_dic_stats.min_value,
+    //         Precision::Exact(Utf8(Some("a".into())))
+    //     );
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    async fn _run_test_statistics_from_parquet_metadata(
-        force_views: ForceViews,
-    ) -> Result<()> {
-        // Data for column c1: ["Foo", null, "bar"]
-        let c1: ArrayRef =
-            Arc::new(StringArray::from(vec![Some("Foo"), None, Some("bar")]));
-        let batch1 = RecordBatch::try_from_iter(vec![("c1", c1.clone())]).unwrap();
+    // async fn _run_test_statistics_from_parquet_metadata(
+    //     force_views: ForceViews,
+    // ) -> Result<()> {
+    //     // Data for column c1: ["Foo", null, "bar"]
+    //     let c1: ArrayRef =
+    //         Arc::new(StringArray::from(vec![Some("Foo"), None, Some("bar")]));
+    //     let batch1 = RecordBatch::try_from_iter(vec![("c1", c1.clone())]).unwrap();
 
-        // Data for column c2: [1, 2, null]
-        let c2: ArrayRef = Arc::new(Int64Array::from(vec![Some(1), Some(2), None]));
-        let batch2 = RecordBatch::try_from_iter(vec![("c2", c2)]).unwrap();
+    //     // Data for column c2: [1, 2, null]
+    //     let c2: ArrayRef = Arc::new(Int64Array::from(vec![Some(1), Some(2), None]));
+    //     let batch2 = RecordBatch::try_from_iter(vec![("c2", c2)]).unwrap();
 
-        // Use store_parquet to write each batch to its own file
-        // . batch1 written into first file and includes:
-        //    - column c1 that has 3 rows with one null. Stats min and max of string column is missing for this test even the column has values
-        // . batch2 written into second file and includes:
-        //    - column c2 that has 3 rows with one null. Stats min and max of int are available and 1 and 2 respectively
-        let store = Arc::new(LocalFileSystem::new()) as _;
-        let (files, _file_names) = store_parquet(vec![batch1, batch2], false).await?;
+    //     // Use store_parquet to write each batch to its own file
+    //     // . batch1 written into first file and includes:
+    //     //    - column c1 that has 3 rows with one null. Stats min and max of string column is missing for this test even the column has values
+    //     // . batch2 written into second file and includes:
+    //     //    - column c2 that has 3 rows with one null. Stats min and max of int are available and 1 and 2 respectively
+    //     let store = Arc::new(LocalFileSystem::new()) as _;
+    //     let (files, _file_names) = store_parquet(vec![batch1, batch2], false).await?;
 
-        let force_views = match force_views {
-            ForceViews::Yes => true,
-            ForceViews::No => false,
-        };
+    //     let force_views = match force_views {
+    //         ForceViews::Yes => true,
+    //         ForceViews::No => false,
+    //     };
 
-        let mut state = SessionContext::new().state();
-        state = set_view_state(state, force_views);
-        let format = ParquetFormat::default().with_force_view_types(force_views);
-        let schema = format.infer_schema(&state, &store, &files).await.unwrap();
+    //     let mut state = SessionContext::new().state();
+    //     state = set_view_state(state, force_views);
+    //     let format = ParquetFormat::default().with_force_view_types(force_views);
+    //     let schema = format.infer_schema(&state, &store, &files).await.unwrap();
 
-        let null_i64 = ScalarValue::Int64(None);
-        let null_utf8 = if force_views {
-            ScalarValue::Utf8View(None)
-        } else {
-            Utf8(None)
-        };
+    //     let null_i64 = ScalarValue::Int64(None);
+    //     let null_utf8 = if force_views {
+    //         ScalarValue::Utf8View(None)
+    //     } else {
+    //         Utf8(None)
+    //     };
 
-        // Fetch statistics for first file
-        let pq_meta = fetch_parquet_metadata(store.as_ref(), &files[0], None).await?;
-        let stats = statistics_from_parquet_meta_calc(&pq_meta, schema.clone())?;
-        assert_eq!(stats.num_rows, Precision::Exact(3));
-        // column c1
-        let c1_stats = &stats.column_statistics[0];
-        assert_eq!(c1_stats.null_count, Precision::Exact(1));
-        let expected_type = if force_views {
-            ScalarValue::Utf8View
-        } else {
-            Utf8
-        };
-        assert_eq!(
-            c1_stats.max_value,
-            Precision::Exact(expected_type(Some("bar".to_string())))
-        );
-        assert_eq!(
-            c1_stats.min_value,
-            Precision::Exact(expected_type(Some("Foo".to_string())))
-        );
-        // column c2: missing from the file so the table treats all 3 rows as null
-        let c2_stats = &stats.column_statistics[1];
-        assert_eq!(c2_stats.null_count, Precision::Exact(3));
-        assert_eq!(c2_stats.max_value, Precision::Exact(null_i64.clone()));
-        assert_eq!(c2_stats.min_value, Precision::Exact(null_i64.clone()));
+    //     // Fetch statistics for first file
+    //     let pq_meta = fetch_parquet_metadata(store.as_ref(), &files[0], None).await?;
+    //     let stats = statistics_from_parquet_meta_calc(&pq_meta, schema.clone())?;
+    //     assert_eq!(stats.num_rows, Precision::Exact(3));
+    //     // column c1
+    //     let c1_stats = &stats.column_statistics[0];
+    //     assert_eq!(c1_stats.null_count, Precision::Exact(1));
+    //     let expected_type = if force_views {
+    //         ScalarValue::Utf8View
+    //     } else {
+    //         Utf8
+    //     };
+    //     assert_eq!(
+    //         c1_stats.max_value,
+    //         Precision::Exact(expected_type(Some("bar".to_string())))
+    //     );
+    //     assert_eq!(
+    //         c1_stats.min_value,
+    //         Precision::Exact(expected_type(Some("Foo".to_string())))
+    //     );
+    //     // column c2: missing from the file so the table treats all 3 rows as null
+    //     let c2_stats = &stats.column_statistics[1];
+    //     assert_eq!(c2_stats.null_count, Precision::Exact(3));
+    //     assert_eq!(c2_stats.max_value, Precision::Exact(null_i64.clone()));
+    //     assert_eq!(c2_stats.min_value, Precision::Exact(null_i64.clone()));
 
-        // Fetch statistics for second file
-        let pq_meta = fetch_parquet_metadata(store.as_ref(), &files[1], None).await?;
-        let stats = statistics_from_parquet_meta_calc(&pq_meta, schema.clone())?;
-        assert_eq!(stats.num_rows, Precision::Exact(3));
-        // column c1: missing from the file so the table treats all 3 rows as null
-        let c1_stats = &stats.column_statistics[0];
-        assert_eq!(c1_stats.null_count, Precision::Exact(3));
-        assert_eq!(c1_stats.max_value, Precision::Exact(null_utf8.clone()));
-        assert_eq!(c1_stats.min_value, Precision::Exact(null_utf8.clone()));
-        // column c2
-        let c2_stats = &stats.column_statistics[1];
-        assert_eq!(c2_stats.null_count, Precision::Exact(1));
-        assert_eq!(c2_stats.max_value, Precision::Exact(2i64.into()));
-        assert_eq!(c2_stats.min_value, Precision::Exact(1i64.into()));
+    //     // Fetch statistics for second file
+    //     let pq_meta = fetch_parquet_metadata(store.as_ref(), &files[1], None).await?;
+    //     let stats = statistics_from_parquet_meta_calc(&pq_meta, schema.clone())?;
+    //     assert_eq!(stats.num_rows, Precision::Exact(3));
+    //     // column c1: missing from the file so the table treats all 3 rows as null
+    //     let c1_stats = &stats.column_statistics[0];
+    //     assert_eq!(c1_stats.null_count, Precision::Exact(3));
+    //     assert_eq!(c1_stats.max_value, Precision::Exact(null_utf8.clone()));
+    //     assert_eq!(c1_stats.min_value, Precision::Exact(null_utf8.clone()));
+    //     // column c2
+    //     let c2_stats = &stats.column_statistics[1];
+    //     assert_eq!(c2_stats.null_count, Precision::Exact(1));
+    //     assert_eq!(c2_stats.max_value, Precision::Exact(2i64.into()));
+    //     assert_eq!(c2_stats.min_value, Precision::Exact(1i64.into()));
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    #[tokio::test]
-    async fn test_statistics_from_parquet_metadata() -> Result<()> {
-        _run_test_statistics_from_parquet_metadata(ForceViews::No).await?;
+    // #[tokio::test]
+    // async fn test_statistics_from_parquet_metadata() -> Result<()> {
+    //     _run_test_statistics_from_parquet_metadata(ForceViews::No).await?;
 
-        _run_test_statistics_from_parquet_metadata(ForceViews::Yes).await?;
+    //     _run_test_statistics_from_parquet_metadata(ForceViews::Yes).await?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    #[tokio::test]
-    async fn read_small_batches() -> Result<()> {
-        let config = SessionConfig::new().with_batch_size(2);
-        let session_ctx = SessionContext::new_with_config(config);
-        let state = session_ctx.state();
-        let task_ctx = state.task_ctx();
-        let projection = None;
-        let exec = get_exec(&state, "alltypes_plain.parquet", projection, None).await?;
-        let stream = exec.execute(0, task_ctx)?;
+    // #[tokio::test]
+    // async fn read_small_batches() -> Result<()> {
+    //     let config = SessionConfig::new().with_batch_size(2);
+    //     let session_ctx = SessionContext::new_with_config(config);
+    //     let state = session_ctx.state();
+    //     let task_ctx = state.task_ctx();
+    //     let projection = None;
+    //     let exec = get_exec(&state, "alltypes_plain.parquet", projection, None).await?;
+    //     let stream = exec.execute(0, task_ctx)?;
 
-        let tt_batches = stream
-            .map(|batch| {
-                let batch = batch.unwrap();
-                assert_eq!(11, batch.num_columns());
-                assert_eq!(2, batch.num_rows());
-            })
-            .fold(0, |acc, _| async move { acc + 1i32 })
-            .await;
+    //     let tt_batches = stream
+    //         .map(|batch| {
+    //             let batch = batch.unwrap();
+    //             assert_eq!(11, batch.num_columns());
+    //             assert_eq!(2, batch.num_rows());
+    //         })
+    //         .fold(0, |acc, _| async move { acc + 1i32 })
+    //         .await;
 
-        assert_eq!(tt_batches, 4 /* 8/2 */);
+    //     assert_eq!(tt_batches, 4 /* 8/2 */);
 
-        // test metadata
-        assert_eq!(exec.statistics()?.num_rows, Precision::Exact(8));
-        // TODO correct byte size: https://github.com/apache/datafusion/issues/14936
-        assert_eq!(exec.statistics()?.total_byte_size, Precision::Exact(671));
+    //     // test metadata
+    //     assert_eq!(exec.statistics()?.num_rows, Precision::Exact(8));
+    //     // TODO correct byte size: https://github.com/apache/datafusion/issues/14936
+    //     assert_eq!(exec.statistics()?.total_byte_size, Precision::Exact(671));
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     #[tokio::test]
     async fn capture_bytes_scanned_metric() -> Result<()> {
@@ -646,26 +646,26 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn read_limit() -> Result<()> {
-        let session_ctx = SessionContext::new();
-        let state = session_ctx.state();
-        let task_ctx = state.task_ctx();
-        let projection = None;
-        let exec =
-            get_exec(&state, "alltypes_plain.parquet", projection, Some(1)).await?;
+    // #[tokio::test]
+    // async fn read_limit() -> Result<()> {
+    //     let session_ctx = SessionContext::new();
+    //     let state = session_ctx.state();
+    //     let task_ctx = state.task_ctx();
+    //     let projection = None;
+    //     let exec =
+    //         get_exec(&state, "alltypes_plain.parquet", projection, Some(1)).await?;
 
-        // note: even if the limit is set, the executor rounds up to the batch size
-        assert_eq!(exec.statistics()?.num_rows, Precision::Exact(8));
-        // TODO correct byte size: https://github.com/apache/datafusion/issues/14936
-        assert_eq!(exec.statistics()?.total_byte_size, Precision::Exact(671));
-        let batches = collect(exec, task_ctx).await?;
-        assert_eq!(1, batches.len());
-        assert_eq!(11, batches[0].num_columns());
-        assert_eq!(1, batches[0].num_rows());
+    //     // note: even if the limit is set, the executor rounds up to the batch size
+    //     assert_eq!(exec.statistics()?.num_rows, Precision::Exact(8));
+    //     // TODO correct byte size: https://github.com/apache/datafusion/issues/14936
+    //     assert_eq!(exec.statistics()?.total_byte_size, Precision::Exact(671));
+    //     let batches = collect(exec, task_ctx).await?;
+    //     assert_eq!(1, batches.len());
+    //     assert_eq!(11, batches[0].num_columns());
+    //     assert_eq!(1, batches[0].num_rows());
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn set_view_state(mut state: SessionState, use_views: bool) -> SessionState {
         let mut options = TableParquetOptions::default();

@@ -1078,6 +1078,7 @@ mod tests {
 
     use datafusion_common::{DataFusionError, Result, Statistics};
     use datafusion_execution::{SendableRecordBatchStream, TaskContext};
+    use datafusion_expr::statistics::TableStatistics;
 
     use crate::{DisplayAs, ExecutionPlan, PlanProperties};
 
@@ -1132,13 +1133,13 @@ mod tests {
             todo!()
         }
 
-        fn statistics(&self) -> Result<Statistics> {
+        fn statistics(&self) -> Result<TableStatistics> {
             match self {
                 Self::Panic => panic!("expected panic"),
                 Self::Error => {
                     Err(DataFusionError::Internal("expected error".to_string()))
                 }
-                Self::Ok => Ok(Statistics::new_unknown(self.schema().as_ref())),
+                Self::Ok => TableStatistics::new_unknown(self.schema().as_ref()),
             }
         }
     }

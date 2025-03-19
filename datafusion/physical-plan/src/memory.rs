@@ -33,6 +33,7 @@ use arrow::datatypes::SchemaRef;
 use datafusion_common::{internal_err, Result};
 use datafusion_execution::memory_pool::MemoryReservation;
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::EquivalenceProperties;
 
 use futures::Stream;
@@ -251,8 +252,8 @@ impl ExecutionPlan for LazyMemoryExec {
         }))
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        Ok(Statistics::new_unknown(&self.schema))
+    fn statistics(&self) -> Result<TableStatistics> {
+        TableStatistics::new_unknown(&self.schema)
     }
 }
 

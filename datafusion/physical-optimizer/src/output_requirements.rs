@@ -30,6 +30,7 @@ use datafusion_common::config::ConfigOptions;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion_common::{Result, Statistics};
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{Distribution, LexRequirement, PhysicalSortRequirement};
 use datafusion_physical_plan::projection::{
     make_with_child, update_expr, ProjectionExec,
@@ -199,7 +200,7 @@ impl ExecutionPlan for OutputRequirementExec {
         unreachable!();
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         self.input.statistics()
     }
 

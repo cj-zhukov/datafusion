@@ -161,7 +161,7 @@ impl TestParquetFile {
             self.object_store_url.clone(),
             Arc::clone(&self.schema),
             source,
-        )
+        )?
         .with_file(PartitionedFile {
             object_meta: self.object_meta.clone(),
             partition_values: vec![],

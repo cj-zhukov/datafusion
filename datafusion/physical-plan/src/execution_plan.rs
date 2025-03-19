@@ -22,9 +22,9 @@ pub use crate::stream::EmptyRecordBatchStream;
 
 pub use datafusion_common::hash_utils;
 pub use datafusion_common::utils::project_schema;
-pub use datafusion_common::{internal_err, ColumnStatistics, Statistics};
+pub use datafusion_common::internal_err;
 pub use datafusion_execution::{RecordBatchStream, SendableRecordBatchStream};
-use datafusion_expr::statistics::StatisticsNew;
+use datafusion_expr::statistics::TableStatistics;
 pub use datafusion_expr::{Accumulator, ColumnarValue};
 pub use datafusion_physical_expr::window::WindowExpr;
 pub use datafusion_physical_expr::{
@@ -405,9 +405,8 @@ pub trait ExecutionPlan: Debug + DisplayAs + Send + Sync {
     ///
     /// For TableScan executors, which supports filter pushdown, special attention
     /// needs to be paid to whether the stats returned by this method are exact or not
-    fn statistics(&self) -> Result<StatisticsNew> {
-        // Ok(StatisticsNew::new_unknown(&self.schema()))
-        StatisticsNew::new_unknown(&self.schema())
+    fn statistics(&self) -> Result<TableStatistics> {
+        TableStatistics::new_unknown(&self.schema())
     }
 
     /// Returns `true` if a limit can be safely pushed down through this
@@ -1061,7 +1060,7 @@ mod tests {
     use std::any::Any;
     use std::sync::Arc;
 
-    use datafusion_common::{Result, Statistics};
+    use datafusion_common::Result;
     use datafusion_execution::{SendableRecordBatchStream, TaskContext};
 
     use crate::{DisplayAs, DisplayFormatType, ExecutionPlan};
@@ -1117,7 +1116,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn statistics(&self) -> Result<StatisticsNew> {
+        fn statistics(&self) -> Result<TableStatistics> {
             unimplemented!()
         }
     }
@@ -1180,7 +1179,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn statistics(&self) -> Result<StatisticsNew> {
+        fn statistics(&self) -> Result<TableStatistics> {
             unimplemented!()
         }
     }

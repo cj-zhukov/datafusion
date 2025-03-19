@@ -25,12 +25,13 @@ use crate::intervals::cp_solver::{ExprIntervalGraph, PropagationResult};
 use crate::utils::collect_columns;
 use crate::PhysicalExpr;
 
-use arrow::datatypes::Schema;
+use arrow::datatypes::{DataType, Schema};
 use datafusion_common::stats::Precision;
 use datafusion_common::{
     internal_datafusion_err, internal_err, ColumnStatistics, Result, ScalarValue,
 };
 use datafusion_expr::interval_arithmetic::{cardinality_ratio, Interval};
+use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution};
 
 /// The shared context used during the analysis of an expression. Includes
 /// the boundaries for all known columns.
@@ -61,7 +62,7 @@ impl AnalysisContext {
     /// Create a new analysis context from column statistics.
     pub fn try_from_statistics(
         input_schema: &Schema,
-        statistics: &[ColumnStatistics],
+        statistics: &[ColumnStatisticsNew],
     ) -> Result<Self> {
         statistics
             .iter()
@@ -88,14 +89,14 @@ pub struct ExprBoundaries {
     /// range of `a` will be `None`.
     pub interval: Option<Interval>,
     /// Maximum number of distinct values this expression can produce, if known.
-    pub distinct_count: Precision<usize>,
+    pub distinct_count: ProbabilityDistribution,
 }
 
 impl ExprBoundaries {
     /// Create a new `ExprBoundaries` object from column level statistics.
     pub fn try_from_column(
         schema: &Schema,
-        col_stats: &ColumnStatistics,
+        col_stats: &ColumnStatisticsNew,
         col_index: usize,
     ) -> Result<Self> {
         let field = schema.fields().get(col_index).ok_or_else(|| {
@@ -107,23 +108,22 @@ impl ExprBoundaries {
         })?;
         let empty_field =
             ScalarValue::try_from(field.data_type()).unwrap_or(ScalarValue::Null);
-        let interval = Interval::try_new(
-            col_stats
-                .min_value
-                .get_value()
-                .cloned()
-                .unwrap_or(empty_field.clone()),
-            col_stats
-                .max_value
-                .get_value()
-                .cloned()
-                .unwrap_or(empty_field),
-        )?;
+        let min_value = if col_stats.min_value.as_ref().is_null() {
+            empty_field.clone()
+        } else {
+            col_stats.min_value.as_ref().clone()
+        };
+        let max_value = if col_stats.max_value.as_ref().is_null() {
+            empty_field
+        } else {
+            col_stats.max_value.as_ref().clone()
+        };
+        let interval = Interval::try_new(min_value, max_value)?;
         let column = Column::new(field.name(), col_index);
         Ok(ExprBoundaries {
             column,
             interval: Some(interval),
-            distinct_count: col_stats.distinct_count,
+            distinct_count: col_stats.distinct_count.clone(),
         })
     }
 
@@ -138,7 +138,7 @@ impl ExprBoundaries {
                 Ok(Self {
                     column: Column::new(field.name(), i),
                     interval: Some(Interval::make_unbounded(field.data_type())?),
-                    distinct_count: Precision::Absent,
+                    distinct_count: ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?,
                 })
             })
             .collect()
@@ -172,7 +172,7 @@ pub fn analyze(
     {
         if initial_boundaries
             .iter()
-            .any(|bound| bound.distinct_count != Precision::Exact(0))
+            .any(|bound| bound.distinct_count != ProbabilityDistribution::new_uniform(Interval::make_zero(&DataType::UInt64).unwrap()).unwrap())
         {
             return internal_err!(
                 "ExprBoundaries has a non-zero distinct count although it represents an empty table"

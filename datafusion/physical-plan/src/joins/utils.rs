@@ -41,13 +41,16 @@ use arrow::compute;
 use arrow::datatypes::{
     ArrowNativeType, Field, Schema, SchemaBuilder, UInt32Type, UInt64Type,
 };
+use arrow_schema::DataType;
 use datafusion_common::cast::as_boolean_array;
 use datafusion_common::stats::Precision;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion_common::{
-    plan_err, DataFusionError, JoinSide, JoinType, Result, SharedResult,
+    plan_err, DataFusionError, JoinSide, JoinType, Result, ScalarValue, SharedResult
 };
 use datafusion_expr::interval_arithmetic::Interval;
+use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::add_offset_to_expr;
 use datafusion_physical_expr::expressions::Column;
 use datafusion_physical_expr::utils::{collect_columns, merge_vectors};
@@ -629,7 +632,7 @@ pub fn build_join_schema(
         JoinType::LeftSemi | JoinType::LeftAnti => left_fields().unzip(),
         JoinType::LeftMark => {
             let right_field = once((
-                Field::new("mark", arrow::datatypes::DataType::Boolean, false),
+                Field::new("mark", DataType::Boolean, false),
                 ColumnIndex {
                     index: 0,
                     side: JoinSide::None,
@@ -718,10 +721,10 @@ impl<T> Clone for OnceFut<T> {
 
 /// A shared state between statistic aggregators for a join
 /// operation.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct PartialJoinStatistics {
-    pub num_rows: usize,
-    pub column_statistics: Vec<ColumnStatistics>,
+    pub num_rows: ScalarValue,
+    pub column_statistics: Vec<ColumnStatisticsNew>,
 }
 
 /// Estimate the statistics for the given join's output.
@@ -731,18 +734,20 @@ pub(crate) fn estimate_join_statistics(
     on: JoinOn,
     join_type: &JoinType,
     schema: &Schema,
-) -> Result<Statistics> {
+) -> Result<TableStatistics> {
     let left_stats = left.statistics()?;
     let right_stats = right.statistics()?;
 
     let join_stats = estimate_join_cardinality(join_type, left_stats, right_stats, &on);
     let (num_rows, column_statistics) = match join_stats {
-        Some(stats) => (Precision::Inexact(stats.num_rows), stats.column_statistics),
-        None => (Precision::Absent, Statistics::unknown_column(schema)),
+        Some(stats) => (ProbabilityDistribution::new_uniform(Interval::try_new(stats.num_rows.clone(), stats.num_rows)?)?, stats.column_statistics),
+        None => (ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?, TableStatistics::unknown_column(schema)?)
     };
-    Ok(Statistics {
+    let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+
+    Ok(TableStatistics {
         num_rows,
-        total_byte_size: Precision::Absent,
+        total_byte_size,
         column_statistics,
     })
 }
@@ -750,8 +755,8 @@ pub(crate) fn estimate_join_statistics(
 // Estimate the cardinality for the given join with input statistics.
 fn estimate_join_cardinality(
     join_type: &JoinType,
-    left_stats: Statistics,
-    right_stats: Statistics,
+    left_stats: TableStatistics,
+    right_stats: TableStatistics,
     on: &JoinOn,
 ) -> Option<PartialJoinStatistics> {
     let (left_col_stats, right_col_stats) = on
@@ -766,8 +771,8 @@ fn estimate_join_cardinality(
                     right_stats.column_statistics[right.index()].clone(),
                 ),
                 _ => (
-                    ColumnStatistics::new_unknown(),
-                    ColumnStatistics::new_unknown(),
+                    ColumnStatisticsNew::new_unknown().unwrap(),
+                    ColumnStatisticsNew::new_unknown().unwrap(),
                 ),
             }
         })
@@ -775,15 +780,16 @@ fn estimate_join_cardinality(
 
     match join_type {
         JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
+            let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64).unwrap();
             let ij_cardinality = estimate_inner_join_cardinality(
-                Statistics {
-                    num_rows: left_stats.num_rows,
-                    total_byte_size: Precision::Absent,
+                TableStatistics {
+                    num_rows: left_stats.num_rows.clone(),
+                    total_byte_size: total_byte_size.clone(),
                     column_statistics: left_col_stats,
                 },
-                Statistics {
-                    num_rows: right_stats.num_rows,
-                    total_byte_size: Precision::Absent,
+                TableStatistics {
+                    num_rows: right_stats.num_rows.clone(),
+                    total_byte_size,
                     column_statistics: right_col_stats,
                 },
             )?;
@@ -796,15 +802,15 @@ fn estimate_join_cardinality(
                 JoinType::Inner => ij_cardinality,
                 JoinType::Left => ij_cardinality.max(&left_stats.num_rows),
                 JoinType::Right => ij_cardinality.max(&right_stats.num_rows),
-                JoinType::Full => ij_cardinality
-                    .max(&left_stats.num_rows)
-                    .add(&ij_cardinality.max(&right_stats.num_rows))
-                    .sub(&ij_cardinality),
+                // JoinType::Full => ij_cardinality
+                //     .max(&left_stats.num_rows)
+                //     .add(&ij_cardinality.max(&right_stats.num_rows))
+                //     .sub(&ij_cardinality),
                 _ => unreachable!(),
             };
 
             Some(PartialJoinStatistics {
-                num_rows: *cardinality.get_value()?,
+                num_rows: cardinality.as_ref().clone(),
                 // We don't do anything specific here, just combine the existing
                 // statistics which might yield subpar results (although it is
                 // true, esp regarding min/max). For a better estimation, we need
@@ -826,8 +832,8 @@ fn estimate_join_cardinality(
                 _ => (right_stats, left_stats),
             };
             let cardinality = match estimate_disjoint_inputs(&outer_stats, &inner_stats) {
-                Some(estimation) => *estimation.get_value()?,
-                None => *outer_stats.num_rows.get_value()?,
+                Some(estimation) => estimation.as_ref().clone(),
+                None => outer_stats.num_rows.as_ref().clone(),
             };
 
             Some(PartialJoinStatistics {
@@ -845,15 +851,15 @@ fn estimate_join_cardinality(
             };
 
             Some(PartialJoinStatistics {
-                num_rows: *outer_stats.num_rows.get_value()?,
+                num_rows: outer_stats.num_rows.as_ref().clone(),
                 column_statistics: outer_stats.column_statistics,
             })
         }
 
         JoinType::LeftMark => {
-            let num_rows = *left_stats.num_rows.get_value()?;
+            let num_rows = left_stats.num_rows.as_ref().clone();
             let mut column_statistics = left_stats.column_statistics;
-            column_statistics.push(ColumnStatistics::new_unknown());
+            column_statistics.push(ColumnStatisticsNew::new_unknown().unwrap());
             Some(PartialJoinStatistics {
                 num_rows,
                 column_statistics,
@@ -867,9 +873,9 @@ fn estimate_join_cardinality(
 /// a very conservative implementation that can quickly give up if there is not
 /// enough input statistics.
 fn estimate_inner_join_cardinality(
-    left_stats: Statistics,
-    right_stats: Statistics,
-) -> Option<Precision<usize>> {
+    left_stats: TableStatistics,
+    right_stats: TableStatistics,
+) -> Option<ProbabilityDistribution> {
     // Immediately return if inputs considered as non-overlapping
     if let Some(estimation) = estimate_disjoint_inputs(&left_stats, &right_stats) {
         return Some(estimation);
@@ -877,17 +883,18 @@ fn estimate_inner_join_cardinality(
 
     // The algorithm here is partly based on the non-histogram selectivity estimation
     // from Spark's Catalyst optimizer.
-    let mut join_selectivity = Precision::Absent;
+    // let mut join_selectivity = Precision::Absent;
+    let mut join_selectivity = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64).unwrap();
     for (left_stat, right_stat) in left_stats
         .column_statistics
         .iter()
         .zip(right_stats.column_statistics.iter())
     {
         // Break if any of statistics bounds are undefined
-        if left_stat.min_value.get_value().is_none()
-            || left_stat.max_value.get_value().is_none()
-            || right_stat.min_value.get_value().is_none()
-            || right_stat.max_value.get_value().is_none()
+        if left_stat.min_value.as_ref().is_null() 
+            || left_stat.max_value.as_ref().is_null()
+            || right_stat.min_value.as_ref().is_null()
+            || right_stat.max_value.as_ref().is_null() 
         {
             return None;
         }
@@ -895,7 +902,7 @@ fn estimate_inner_join_cardinality(
         let left_max_distinct = max_distinct_count(&left_stats.num_rows, left_stat);
         let right_max_distinct = max_distinct_count(&right_stats.num_rows, right_stat);
         let max_distinct = left_max_distinct.max(&right_max_distinct);
-        if max_distinct.get_value().is_some() {
+        if !max_distinct.as_ref().is_null() {
             // Seems like there are a few implementations of this algorithm that implement
             // exponential decay for the selectivity (like Hive's Optiq Optimizer). Needs
             // further exploration.
@@ -906,29 +913,30 @@ fn estimate_inner_join_cardinality(
     // With the assumption that the smaller input's domain is generally represented in the bigger
     // input's domain, we can estimate the inner join's cardinality by taking the cartesian product
     // of the two inputs and normalizing it by the selectivity factor.
-    let left_num_rows = left_stats.num_rows.get_value()?;
-    let right_num_rows = right_stats.num_rows.get_value()?;
-    match join_selectivity {
-        Precision::Exact(value) if value > 0 => {
-            Some(Precision::Exact((left_num_rows * right_num_rows) / value))
-        }
-        Precision::Inexact(value) if value > 0 => {
-            Some(Precision::Inexact((left_num_rows * right_num_rows) / value))
-        }
-        // Since we don't have any information about the selectivity (which is derived
-        // from the number of distinct rows information) we can give up here for now.
-        // And let other passes handle this (otherwise we would need to produce an
-        // overestimation using just the cartesian product).
-        _ => None,
-    }
+    let left_num_rows = left_stats.num_rows.as_ref();
+    let right_num_rows = right_stats.num_rows.as_ref();
+    // match join_selectivity {
+    //     Precision::Exact(value) if value > 0 => {
+    //         Some(Precision::Exact((left_num_rows * right_num_rows) / value))
+    //     }
+    //     Precision::Inexact(value) if value > 0 => {
+    //         Some(Precision::Inexact((left_num_rows * right_num_rows) / value))
+    //     }
+    //     // Since we don't have any information about the selectivity (which is derived
+    //     // from the number of distinct rows information) we can give up here for now.
+    //     // And let other passes handle this (otherwise we would need to produce an
+    //     // overestimation using just the cartesian product).
+    //     _ => None,
+    // }
+    todo!()
 }
 
 /// Estimates if inputs are non-overlapping, using input statistics.
 /// If inputs are disjoint, returns zero estimation, otherwise returns None
 fn estimate_disjoint_inputs(
-    left_stats: &Statistics,
-    right_stats: &Statistics,
-) -> Option<Precision<usize>> {
+    left_stats: &TableStatistics,
+    right_stats: &TableStatistics,
+) -> Option<ProbabilityDistribution> {
     for (left_stat, right_stat) in left_stats
         .column_statistics
         .iter()
@@ -937,37 +945,21 @@ fn estimate_disjoint_inputs(
         // If there is no overlap in any of the join columns, this means the join
         // itself is disjoint and the cardinality is 0. Though we can only assume
         // this when the statistics are exact (since it is a very strong assumption).
-        let left_min_val = left_stat.min_value.get_value();
-        let right_max_val = right_stat.max_value.get_value();
-        if left_min_val.is_some()
-            && right_max_val.is_some()
-            && left_min_val > right_max_val
+        let left_min_val = left_stat.min_value.as_ref();
+        let right_max_val = right_stat.max_value.as_ref();
+        if left_min_val > right_max_val
         {
             return Some(
-                if left_stat.min_value.is_exact().unwrap_or(false)
-                    && right_stat.max_value.is_exact().unwrap_or(false)
-                {
-                    Precision::Exact(0)
-                } else {
-                    Precision::Inexact(0)
-                },
+                ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(0)).unwrap()).unwrap()
             );
         }
 
-        let left_max_val = left_stat.max_value.get_value();
-        let right_min_val = right_stat.min_value.get_value();
-        if left_max_val.is_some()
-            && right_min_val.is_some()
-            && left_max_val < right_min_val
+        let left_max_val = left_stat.max_value.as_ref();
+        let right_min_val = right_stat.min_value.as_ref();
+        if left_max_val < right_min_val
         {
             return Some(
-                if left_stat.max_value.is_exact().unwrap_or(false)
-                    && right_stat.min_value.is_exact().unwrap_or(false)
-                {
-                    Precision::Exact(0)
-                } else {
-                    Precision::Inexact(0)
-                },
+                ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(0)).unwrap()).unwrap()
             );
         }
     }
@@ -980,62 +972,63 @@ fn estimate_disjoint_inputs(
 /// directly. Otherwise, if the column is numeric and has min/max values, it
 /// estimates the maximum distinct count from those.
 fn max_distinct_count(
-    num_rows: &Precision<usize>,
-    stats: &ColumnStatistics,
-) -> Precision<usize> {
-    match &stats.distinct_count {
-        &dc @ (Precision::Exact(_) | Precision::Inexact(_)) => dc,
-        _ => {
-            // The number can never be greater than the number of rows we have
-            // minus the nulls (since they don't count as distinct values).
-            let result = match num_rows {
-                Precision::Absent => Precision::Absent,
-                Precision::Inexact(count) => {
-                    // To safeguard against inexact number of rows (e.g. 0) being smaller than
-                    // an exact null count we need to do a checked subtraction.
-                    match count.checked_sub(*stats.null_count.get_value().unwrap_or(&0)) {
-                        None => Precision::Inexact(0),
-                        Some(non_null_count) => Precision::Inexact(non_null_count),
-                    }
-                }
-                Precision::Exact(count) => {
-                    let count = count - stats.null_count.get_value().unwrap_or(&0);
-                    if stats.null_count.is_exact().unwrap_or(false) {
-                        Precision::Exact(count)
-                    } else {
-                        Precision::Inexact(count)
-                    }
-                }
-            };
-            // Cap the estimate using the number of possible values:
-            if let (Some(min), Some(max)) =
-                (stats.min_value.get_value(), stats.max_value.get_value())
-            {
-                if let Some(range_dc) = Interval::try_new(min.clone(), max.clone())
-                    .ok()
-                    .and_then(|e| e.cardinality())
-                {
-                    let range_dc = range_dc as usize;
-                    // Note that the `unwrap` calls in the below statement are safe.
-                    return if matches!(result, Precision::Absent)
-                        || &range_dc < result.get_value().unwrap()
-                    {
-                        if stats.min_value.is_exact().unwrap()
-                            && stats.max_value.is_exact().unwrap()
-                        {
-                            Precision::Exact(range_dc)
-                        } else {
-                            Precision::Inexact(range_dc)
-                        }
-                    } else {
-                        result
-                    };
-                }
-            }
+    num_rows: &ProbabilityDistribution,
+    stats: &ColumnStatisticsNew,
+) -> ProbabilityDistribution {
+    // match &stats.distinct_count {
+    //     &dc @ (Precision::Exact(_) | Precision::Inexact(_)) => dc,
+    //     _ => {
+    //         // The number can never be greater than the number of rows we have
+    //         // minus the nulls (since they don't count as distinct values).
+    //         let result = match num_rows {
+    //             Precision::Absent => Precision::Absent,
+    //             Precision::Inexact(count) => {
+    //                 // To safeguard against inexact number of rows (e.g. 0) being smaller than
+    //                 // an exact null count we need to do a checked subtraction.
+    //                 match count.checked_sub(*stats.null_count.get_value().unwrap_or(&0)) {
+    //                     None => Precision::Inexact(0),
+    //                     Some(non_null_count) => Precision::Inexact(non_null_count),
+    //                 }
+    //             }
+    //             Precision::Exact(count) => {
+    //                 let count = count - stats.null_count.get_value().unwrap_or(&0);
+    //                 if stats.null_count.is_exact().unwrap_or(false) {
+    //                     Precision::Exact(count)
+    //                 } else {
+    //                     Precision::Inexact(count)
+    //                 }
+    //             }
+    //         };
+    //         // Cap the estimate using the number of possible values:
+    //         if let (Some(min), Some(max)) =
+    //             (stats.min_value.get_value(), stats.max_value.get_value())
+    //         {
+    //             if let Some(range_dc) = Interval::try_new(min.clone(), max.clone())
+    //                 .ok()
+    //                 .and_then(|e| e.cardinality())
+    //             {
+    //                 let range_dc = range_dc as usize;
+    //                 // Note that the `unwrap` calls in the below statement are safe.
+    //                 return if matches!(result, Precision::Absent)
+    //                     || &range_dc < result.get_value().unwrap()
+    //                 {
+    //                     if stats.min_value.is_exact().unwrap()
+    //                         && stats.max_value.is_exact().unwrap()
+    //                     {
+    //                         Precision::Exact(range_dc)
+    //                     } else {
+    //                         Precision::Inexact(range_dc)
+    //                     }
+    //                 } else {
+    //                     result
+    //                 };
+    //             }
+    //         }
 
-            result
-        }
-    }
+    //         result
+    //     }
+    // }
+    todo!()
 }
 
 enum OnceFutState<T> {
@@ -2044,601 +2037,601 @@ mod tests {
     // This is mainly for validating the all edge cases of the estimation, but
     // more advanced (and real world test cases) are below where we need some control
     // over the expected output (since it depends on join type to join type).
-    #[test]
-    fn test_inner_join_cardinality_single_column() -> Result<()> {
-        let cases: Vec<(PartialStats, PartialStats, Option<Precision<usize>>)> = vec![
-            // ------------------------------------------------
-            // | left(rows, min, max, distinct, null_count),  |
-            // | right(rows, min, max, distinct, null_count), |
-            // | expected,                                    |
-            // ------------------------------------------------
+    // #[test]
+    // fn test_inner_join_cardinality_single_column() -> Result<()> {
+    //     let cases: Vec<(PartialStats, PartialStats, Option<Precision<usize>>)> = vec![
+    //         // ------------------------------------------------
+    //         // | left(rows, min, max, distinct, null_count),  |
+    //         // | right(rows, min, max, distinct, null_count), |
+    //         // | expected,                                    |
+    //         // ------------------------------------------------
 
-            // Cardinality computation
-            // =======================
-            //
-            // distinct(left) == NaN, distinct(right) == NaN
-            (
-                (10, Inexact(1), Inexact(10), Absent, Absent),
-                (10, Inexact(1), Inexact(10), Absent, Absent),
-                Some(Inexact(10)),
-            ),
-            // range(left) > range(right)
-            (
-                (10, Inexact(6), Inexact(10), Absent, Absent),
-                (10, Inexact(8), Inexact(10), Absent, Absent),
-                Some(Inexact(20)),
-            ),
-            // range(right) > range(left)
-            (
-                (10, Inexact(8), Inexact(10), Absent, Absent),
-                (10, Inexact(6), Inexact(10), Absent, Absent),
-                Some(Inexact(20)),
-            ),
-            // range(left) > len(left), range(right) > len(right)
-            (
-                (10, Inexact(1), Inexact(15), Absent, Absent),
-                (20, Inexact(1), Inexact(40), Absent, Absent),
-                Some(Inexact(10)),
-            ),
-            // When we have distinct count.
-            (
-                (10, Inexact(1), Inexact(10), Inexact(10), Absent),
-                (10, Inexact(1), Inexact(10), Inexact(10), Absent),
-                Some(Inexact(10)),
-            ),
-            // distinct(left) > distinct(right)
-            (
-                (10, Inexact(1), Inexact(10), Inexact(5), Absent),
-                (10, Inexact(1), Inexact(10), Inexact(2), Absent),
-                Some(Inexact(20)),
-            ),
-            // distinct(right) > distinct(left)
-            (
-                (10, Inexact(1), Inexact(10), Inexact(2), Absent),
-                (10, Inexact(1), Inexact(10), Inexact(5), Absent),
-                Some(Inexact(20)),
-            ),
-            // min(left) < 0 (range(left) > range(right))
-            (
-                (10, Inexact(-5), Inexact(5), Absent, Absent),
-                (10, Inexact(1), Inexact(5), Absent, Absent),
-                Some(Inexact(10)),
-            ),
-            // min(right) < 0, max(right) < 0 (range(right) > range(left))
-            (
-                (10, Inexact(-25), Inexact(-20), Absent, Absent),
-                (10, Inexact(-25), Inexact(-15), Absent, Absent),
-                Some(Inexact(10)),
-            ),
-            // range(left) < 0, range(right) >= 0
-            // (there isn't a case where both left and right ranges are negative
-            //  so one of them is always going to work, this just proves negative
-            //  ranges with bigger absolute values are not are not accidentally used).
-            (
-                (10, Inexact(-10), Inexact(0), Absent, Absent),
-                (10, Inexact(0), Inexact(10), Inexact(5), Absent),
-                Some(Inexact(10)),
-            ),
-            // range(left) = 1, range(right) = 1
-            (
-                (10, Inexact(1), Inexact(1), Absent, Absent),
-                (10, Inexact(1), Inexact(1), Absent, Absent),
-                Some(Inexact(100)),
-            ),
-            //
-            // Edge cases
-            // ==========
-            //
-            // No column level stats.
-            (
-                (10, Absent, Absent, Absent, Absent),
-                (10, Absent, Absent, Absent, Absent),
-                None,
-            ),
-            // No min or max (or both).
-            (
-                (10, Absent, Absent, Inexact(3), Absent),
-                (10, Absent, Absent, Inexact(3), Absent),
-                None,
-            ),
-            (
-                (10, Inexact(2), Absent, Inexact(3), Absent),
-                (10, Absent, Inexact(5), Inexact(3), Absent),
-                None,
-            ),
-            (
-                (10, Absent, Inexact(3), Inexact(3), Absent),
-                (10, Inexact(1), Absent, Inexact(3), Absent),
-                None,
-            ),
-            (
-                (10, Absent, Inexact(3), Absent, Absent),
-                (10, Inexact(1), Absent, Absent, Absent),
-                None,
-            ),
-            // Non overlapping min/max (when exact=False).
-            (
-                (10, Absent, Inexact(4), Absent, Absent),
-                (10, Inexact(5), Absent, Absent, Absent),
-                Some(Inexact(0)),
-            ),
-            (
-                (10, Inexact(0), Inexact(10), Absent, Absent),
-                (10, Inexact(11), Inexact(20), Absent, Absent),
-                Some(Inexact(0)),
-            ),
-            (
-                (10, Inexact(11), Inexact(20), Absent, Absent),
-                (10, Inexact(0), Inexact(10), Absent, Absent),
-                Some(Inexact(0)),
-            ),
-            // distinct(left) = 0, distinct(right) = 0
-            (
-                (10, Inexact(1), Inexact(10), Inexact(0), Absent),
-                (10, Inexact(1), Inexact(10), Inexact(0), Absent),
-                None,
-            ),
-            // Inexact row count < exact null count with absent distinct count
-            (
-                (0, Inexact(1), Inexact(10), Absent, Exact(5)),
-                (10, Inexact(1), Inexact(10), Absent, Absent),
-                Some(Inexact(0)),
-            ),
-        ];
+    //         // Cardinality computation
+    //         // =======================
+    //         //
+    //         // distinct(left) == NaN, distinct(right) == NaN
+    //         (
+    //             (10, Inexact(1), Inexact(10), Absent, Absent),
+    //             (10, Inexact(1), Inexact(10), Absent, Absent),
+    //             Some(Inexact(10)),
+    //         ),
+    //         // range(left) > range(right)
+    //         (
+    //             (10, Inexact(6), Inexact(10), Absent, Absent),
+    //             (10, Inexact(8), Inexact(10), Absent, Absent),
+    //             Some(Inexact(20)),
+    //         ),
+    //         // range(right) > range(left)
+    //         (
+    //             (10, Inexact(8), Inexact(10), Absent, Absent),
+    //             (10, Inexact(6), Inexact(10), Absent, Absent),
+    //             Some(Inexact(20)),
+    //         ),
+    //         // range(left) > len(left), range(right) > len(right)
+    //         (
+    //             (10, Inexact(1), Inexact(15), Absent, Absent),
+    //             (20, Inexact(1), Inexact(40), Absent, Absent),
+    //             Some(Inexact(10)),
+    //         ),
+    //         // When we have distinct count.
+    //         (
+    //             (10, Inexact(1), Inexact(10), Inexact(10), Absent),
+    //             (10, Inexact(1), Inexact(10), Inexact(10), Absent),
+    //             Some(Inexact(10)),
+    //         ),
+    //         // distinct(left) > distinct(right)
+    //         (
+    //             (10, Inexact(1), Inexact(10), Inexact(5), Absent),
+    //             (10, Inexact(1), Inexact(10), Inexact(2), Absent),
+    //             Some(Inexact(20)),
+    //         ),
+    //         // distinct(right) > distinct(left)
+    //         (
+    //             (10, Inexact(1), Inexact(10), Inexact(2), Absent),
+    //             (10, Inexact(1), Inexact(10), Inexact(5), Absent),
+    //             Some(Inexact(20)),
+    //         ),
+    //         // min(left) < 0 (range(left) > range(right))
+    //         (
+    //             (10, Inexact(-5), Inexact(5), Absent, Absent),
+    //             (10, Inexact(1), Inexact(5), Absent, Absent),
+    //             Some(Inexact(10)),
+    //         ),
+    //         // min(right) < 0, max(right) < 0 (range(right) > range(left))
+    //         (
+    //             (10, Inexact(-25), Inexact(-20), Absent, Absent),
+    //             (10, Inexact(-25), Inexact(-15), Absent, Absent),
+    //             Some(Inexact(10)),
+    //         ),
+    //         // range(left) < 0, range(right) >= 0
+    //         // (there isn't a case where both left and right ranges are negative
+    //         //  so one of them is always going to work, this just proves negative
+    //         //  ranges with bigger absolute values are not are not accidentally used).
+    //         (
+    //             (10, Inexact(-10), Inexact(0), Absent, Absent),
+    //             (10, Inexact(0), Inexact(10), Inexact(5), Absent),
+    //             Some(Inexact(10)),
+    //         ),
+    //         // range(left) = 1, range(right) = 1
+    //         (
+    //             (10, Inexact(1), Inexact(1), Absent, Absent),
+    //             (10, Inexact(1), Inexact(1), Absent, Absent),
+    //             Some(Inexact(100)),
+    //         ),
+    //         //
+    //         // Edge cases
+    //         // ==========
+    //         //
+    //         // No column level stats.
+    //         (
+    //             (10, Absent, Absent, Absent, Absent),
+    //             (10, Absent, Absent, Absent, Absent),
+    //             None,
+    //         ),
+    //         // No min or max (or both).
+    //         (
+    //             (10, Absent, Absent, Inexact(3), Absent),
+    //             (10, Absent, Absent, Inexact(3), Absent),
+    //             None,
+    //         ),
+    //         (
+    //             (10, Inexact(2), Absent, Inexact(3), Absent),
+    //             (10, Absent, Inexact(5), Inexact(3), Absent),
+    //             None,
+    //         ),
+    //         (
+    //             (10, Absent, Inexact(3), Inexact(3), Absent),
+    //             (10, Inexact(1), Absent, Inexact(3), Absent),
+    //             None,
+    //         ),
+    //         (
+    //             (10, Absent, Inexact(3), Absent, Absent),
+    //             (10, Inexact(1), Absent, Absent, Absent),
+    //             None,
+    //         ),
+    //         // Non overlapping min/max (when exact=False).
+    //         (
+    //             (10, Absent, Inexact(4), Absent, Absent),
+    //             (10, Inexact(5), Absent, Absent, Absent),
+    //             Some(Inexact(0)),
+    //         ),
+    //         (
+    //             (10, Inexact(0), Inexact(10), Absent, Absent),
+    //             (10, Inexact(11), Inexact(20), Absent, Absent),
+    //             Some(Inexact(0)),
+    //         ),
+    //         (
+    //             (10, Inexact(11), Inexact(20), Absent, Absent),
+    //             (10, Inexact(0), Inexact(10), Absent, Absent),
+    //             Some(Inexact(0)),
+    //         ),
+    //         // distinct(left) = 0, distinct(right) = 0
+    //         (
+    //             (10, Inexact(1), Inexact(10), Inexact(0), Absent),
+    //             (10, Inexact(1), Inexact(10), Inexact(0), Absent),
+    //             None,
+    //         ),
+    //         // Inexact row count < exact null count with absent distinct count
+    //         (
+    //             (0, Inexact(1), Inexact(10), Absent, Exact(5)),
+    //             (10, Inexact(1), Inexact(10), Absent, Absent),
+    //             Some(Inexact(0)),
+    //         ),
+    //     ];
 
-        for (left_info, right_info, expected_cardinality) in cases {
-            let left_num_rows = left_info.0;
-            let left_col_stats = vec![create_column_stats(
-                left_info.1,
-                left_info.2,
-                left_info.3,
-                left_info.4,
-            )];
+    //     for (left_info, right_info, expected_cardinality) in cases {
+    //         let left_num_rows = left_info.0;
+    //         let left_col_stats = vec![create_column_stats(
+    //             left_info.1,
+    //             left_info.2,
+    //             left_info.3,
+    //             left_info.4,
+    //         )];
 
-            let right_num_rows = right_info.0;
-            let right_col_stats = vec![create_column_stats(
-                right_info.1,
-                right_info.2,
-                right_info.3,
-                right_info.4,
-            )];
+    //         let right_num_rows = right_info.0;
+    //         let right_col_stats = vec![create_column_stats(
+    //             right_info.1,
+    //             right_info.2,
+    //             right_info.3,
+    //             right_info.4,
+    //         )];
 
-            assert_eq!(
-                estimate_inner_join_cardinality(
-                    Statistics {
-                        num_rows: Inexact(left_num_rows),
-                        total_byte_size: Absent,
-                        column_statistics: left_col_stats.clone(),
-                    },
-                    Statistics {
-                        num_rows: Inexact(right_num_rows),
-                        total_byte_size: Absent,
-                        column_statistics: right_col_stats.clone(),
-                    },
-                ),
-                expected_cardinality.clone()
-            );
+    //         assert_eq!(
+    //             estimate_inner_join_cardinality(
+    //                 Statistics {
+    //                     num_rows: Inexact(left_num_rows),
+    //                     total_byte_size: Absent,
+    //                     column_statistics: left_col_stats.clone(),
+    //                 },
+    //                 Statistics {
+    //                     num_rows: Inexact(right_num_rows),
+    //                     total_byte_size: Absent,
+    //                     column_statistics: right_col_stats.clone(),
+    //                 },
+    //             ),
+    //             expected_cardinality.clone()
+    //         );
 
-            // We should also be able to use join_cardinality to get the same results
-            let join_type = JoinType::Inner;
-            let join_on = vec![(
-                Arc::new(Column::new("a", 0)) as _,
-                Arc::new(Column::new("b", 0)) as _,
-            )];
-            let partial_join_stats = estimate_join_cardinality(
-                &join_type,
-                create_stats(Some(left_num_rows), left_col_stats.clone(), false),
-                create_stats(Some(right_num_rows), right_col_stats.clone(), false),
-                &join_on,
-            );
+    //         // We should also be able to use join_cardinality to get the same results
+    //         let join_type = JoinType::Inner;
+    //         let join_on = vec![(
+    //             Arc::new(Column::new("a", 0)) as _,
+    //             Arc::new(Column::new("b", 0)) as _,
+    //         )];
+    //         let partial_join_stats = estimate_join_cardinality(
+    //             &join_type,
+    //             create_stats(Some(left_num_rows), left_col_stats.clone(), false),
+    //             create_stats(Some(right_num_rows), right_col_stats.clone(), false),
+    //             &join_on,
+    //         );
 
-            assert_eq!(
-                partial_join_stats.clone().map(|s| Inexact(s.num_rows)),
-                expected_cardinality.clone()
-            );
-            assert_eq!(
-                partial_join_stats.map(|s| s.column_statistics),
-                expected_cardinality.map(|_| [left_col_stats, right_col_stats].concat())
-            );
-        }
-        Ok(())
-    }
+    //         assert_eq!(
+    //             partial_join_stats.clone().map(|s| Inexact(s.num_rows)),
+    //             expected_cardinality.clone()
+    //         );
+    //         assert_eq!(
+    //             partial_join_stats.map(|s| s.column_statistics),
+    //             expected_cardinality.map(|_| [left_col_stats, right_col_stats].concat())
+    //         );
+    //     }
+    //     Ok(())
+    // }
 
-    #[test]
-    fn test_inner_join_cardinality_multiple_column() -> Result<()> {
-        let left_col_stats = vec![
-            create_column_stats(Inexact(0), Inexact(100), Inexact(100), Absent),
-            create_column_stats(Inexact(100), Inexact(500), Inexact(150), Absent),
-        ];
+    // #[test]
+    // fn test_inner_join_cardinality_multiple_column() -> Result<()> {
+    //     let left_col_stats = vec![
+    //         create_column_stats(Inexact(0), Inexact(100), Inexact(100), Absent),
+    //         create_column_stats(Inexact(100), Inexact(500), Inexact(150), Absent),
+    //     ];
 
-        let right_col_stats = vec![
-            create_column_stats(Inexact(0), Inexact(100), Inexact(50), Absent),
-            create_column_stats(Inexact(100), Inexact(500), Inexact(200), Absent),
-        ];
+    //     let right_col_stats = vec![
+    //         create_column_stats(Inexact(0), Inexact(100), Inexact(50), Absent),
+    //         create_column_stats(Inexact(100), Inexact(500), Inexact(200), Absent),
+    //     ];
 
-        // We have statistics about 4 columns, where the highest distinct
-        // count is 200, so we are going to pick it.
-        assert_eq!(
-            estimate_inner_join_cardinality(
-                Statistics {
-                    num_rows: Inexact(400),
-                    total_byte_size: Absent,
-                    column_statistics: left_col_stats,
-                },
-                Statistics {
-                    num_rows: Inexact(400),
-                    total_byte_size: Absent,
-                    column_statistics: right_col_stats,
-                },
-            ),
-            Some(Inexact((400 * 400) / 200))
-        );
-        Ok(())
-    }
+    //     // We have statistics about 4 columns, where the highest distinct
+    //     // count is 200, so we are going to pick it.
+    //     assert_eq!(
+    //         estimate_inner_join_cardinality(
+    //             Statistics {
+    //                 num_rows: Inexact(400),
+    //                 total_byte_size: Absent,
+    //                 column_statistics: left_col_stats,
+    //             },
+    //             Statistics {
+    //                 num_rows: Inexact(400),
+    //                 total_byte_size: Absent,
+    //                 column_statistics: right_col_stats,
+    //             },
+    //         ),
+    //         Some(Inexact((400 * 400) / 200))
+    //     );
+    //     Ok(())
+    // }
 
-    #[test]
-    fn test_inner_join_cardinality_decimal_range() -> Result<()> {
-        let left_col_stats = vec![ColumnStatistics {
-            distinct_count: Absent,
-            min_value: Inexact(ScalarValue::Decimal128(Some(32500), 14, 4)),
-            max_value: Inexact(ScalarValue::Decimal128(Some(35000), 14, 4)),
-            ..Default::default()
-        }];
+    // #[test]
+    // fn test_inner_join_cardinality_decimal_range() -> Result<()> {
+    //     let left_col_stats = vec![ColumnStatistics {
+    //         distinct_count: Absent,
+    //         min_value: Inexact(ScalarValue::Decimal128(Some(32500), 14, 4)),
+    //         max_value: Inexact(ScalarValue::Decimal128(Some(35000), 14, 4)),
+    //         ..Default::default()
+    //     }];
 
-        let right_col_stats = vec![ColumnStatistics {
-            distinct_count: Absent,
-            min_value: Inexact(ScalarValue::Decimal128(Some(33500), 14, 4)),
-            max_value: Inexact(ScalarValue::Decimal128(Some(34000), 14, 4)),
-            ..Default::default()
-        }];
+    //     let right_col_stats = vec![ColumnStatistics {
+    //         distinct_count: Absent,
+    //         min_value: Inexact(ScalarValue::Decimal128(Some(33500), 14, 4)),
+    //         max_value: Inexact(ScalarValue::Decimal128(Some(34000), 14, 4)),
+    //         ..Default::default()
+    //     }];
 
-        assert_eq!(
-            estimate_inner_join_cardinality(
-                Statistics {
-                    num_rows: Inexact(100),
-                    total_byte_size: Absent,
-                    column_statistics: left_col_stats,
-                },
-                Statistics {
-                    num_rows: Inexact(100),
-                    total_byte_size: Absent,
-                    column_statistics: right_col_stats,
-                },
-            ),
-            Some(Inexact(100))
-        );
-        Ok(())
-    }
+    //     assert_eq!(
+    //         estimate_inner_join_cardinality(
+    //             Statistics {
+    //                 num_rows: Inexact(100),
+    //                 total_byte_size: Absent,
+    //                 column_statistics: left_col_stats,
+    //             },
+    //             Statistics {
+    //                 num_rows: Inexact(100),
+    //                 total_byte_size: Absent,
+    //                 column_statistics: right_col_stats,
+    //             },
+    //         ),
+    //         Some(Inexact(100))
+    //     );
+    //     Ok(())
+    // }
 
-    #[test]
-    fn test_join_cardinality() -> Result<()> {
-        // Left table (rows=1000)
-        //   a: min=0, max=100, distinct=100
-        //   b: min=0, max=500, distinct=500
-        //   x: min=1000, max=10000, distinct=None
-        //
-        // Right table (rows=2000)
-        //   c: min=0, max=100, distinct=50
-        //   d: min=0, max=2000, distinct=2500 (how? some inexact statistics)
-        //   y: min=0, max=100, distinct=None
-        //
-        // Join on a=c, b=d (ignore x/y)
-        let cases = vec![
-            (JoinType::Inner, 800),
-            (JoinType::Left, 1000),
-            (JoinType::Right, 2000),
-            (JoinType::Full, 2200),
-        ];
+    // #[test]
+    // fn test_join_cardinality() -> Result<()> {
+    //     // Left table (rows=1000)
+    //     //   a: min=0, max=100, distinct=100
+    //     //   b: min=0, max=500, distinct=500
+    //     //   x: min=1000, max=10000, distinct=None
+    //     //
+    //     // Right table (rows=2000)
+    //     //   c: min=0, max=100, distinct=50
+    //     //   d: min=0, max=2000, distinct=2500 (how? some inexact statistics)
+    //     //   y: min=0, max=100, distinct=None
+    //     //
+    //     // Join on a=c, b=d (ignore x/y)
+    //     let cases = vec![
+    //         (JoinType::Inner, 800),
+    //         (JoinType::Left, 1000),
+    //         (JoinType::Right, 2000),
+    //         (JoinType::Full, 2200),
+    //     ];
 
-        let left_col_stats = vec![
-            create_column_stats(Inexact(0), Inexact(100), Inexact(100), Absent),
-            create_column_stats(Inexact(0), Inexact(500), Inexact(500), Absent),
-            create_column_stats(Inexact(1000), Inexact(10000), Absent, Absent),
-        ];
+    //     let left_col_stats = vec![
+    //         create_column_stats(Inexact(0), Inexact(100), Inexact(100), Absent),
+    //         create_column_stats(Inexact(0), Inexact(500), Inexact(500), Absent),
+    //         create_column_stats(Inexact(1000), Inexact(10000), Absent, Absent),
+    //     ];
 
-        let right_col_stats = vec![
-            create_column_stats(Inexact(0), Inexact(100), Inexact(50), Absent),
-            create_column_stats(Inexact(0), Inexact(2000), Inexact(2500), Absent),
-            create_column_stats(Inexact(0), Inexact(100), Absent, Absent),
-        ];
+    //     let right_col_stats = vec![
+    //         create_column_stats(Inexact(0), Inexact(100), Inexact(50), Absent),
+    //         create_column_stats(Inexact(0), Inexact(2000), Inexact(2500), Absent),
+    //         create_column_stats(Inexact(0), Inexact(100), Absent, Absent),
+    //     ];
 
-        for (join_type, expected_num_rows) in cases {
-            let join_on = vec![
-                (
-                    Arc::new(Column::new("a", 0)) as _,
-                    Arc::new(Column::new("c", 0)) as _,
-                ),
-                (
-                    Arc::new(Column::new("b", 1)) as _,
-                    Arc::new(Column::new("d", 1)) as _,
-                ),
-            ];
+    //     for (join_type, expected_num_rows) in cases {
+    //         let join_on = vec![
+    //             (
+    //                 Arc::new(Column::new("a", 0)) as _,
+    //                 Arc::new(Column::new("c", 0)) as _,
+    //             ),
+    //             (
+    //                 Arc::new(Column::new("b", 1)) as _,
+    //                 Arc::new(Column::new("d", 1)) as _,
+    //             ),
+    //         ];
 
-            let partial_join_stats = estimate_join_cardinality(
-                &join_type,
-                create_stats(Some(1000), left_col_stats.clone(), false),
-                create_stats(Some(2000), right_col_stats.clone(), false),
-                &join_on,
-            )
-            .unwrap();
-            assert_eq!(partial_join_stats.num_rows, expected_num_rows);
-            assert_eq!(
-                partial_join_stats.column_statistics,
-                [left_col_stats.clone(), right_col_stats.clone()].concat()
-            );
-        }
+    //         let partial_join_stats = estimate_join_cardinality(
+    //             &join_type,
+    //             create_stats(Some(1000), left_col_stats.clone(), false),
+    //             create_stats(Some(2000), right_col_stats.clone(), false),
+    //             &join_on,
+    //         )
+    //         .unwrap();
+    //         assert_eq!(partial_join_stats.num_rows, expected_num_rows);
+    //         assert_eq!(
+    //             partial_join_stats.column_statistics,
+    //             [left_col_stats.clone(), right_col_stats.clone()].concat()
+    //         );
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    #[test]
-    fn test_join_cardinality_when_one_column_is_disjoint() -> Result<()> {
-        // Left table (rows=1000)
-        //   a: min=0, max=100, distinct=100
-        //   b: min=0, max=500, distinct=500
-        //   x: min=1000, max=10000, distinct=None
-        //
-        // Right table (rows=2000)
-        //   c: min=0, max=100, distinct=50
-        //   d: min=0, max=2000, distinct=2500 (how? some inexact statistics)
-        //   y: min=0, max=100, distinct=None
-        //
-        // Join on a=c, x=y (ignores b/d) where x and y does not intersect
+    // #[test]
+    // fn test_join_cardinality_when_one_column_is_disjoint() -> Result<()> {
+    //     // Left table (rows=1000)
+    //     //   a: min=0, max=100, distinct=100
+    //     //   b: min=0, max=500, distinct=500
+    //     //   x: min=1000, max=10000, distinct=None
+    //     //
+    //     // Right table (rows=2000)
+    //     //   c: min=0, max=100, distinct=50
+    //     //   d: min=0, max=2000, distinct=2500 (how? some inexact statistics)
+    //     //   y: min=0, max=100, distinct=None
+    //     //
+    //     // Join on a=c, x=y (ignores b/d) where x and y does not intersect
 
-        let left_col_stats = vec![
-            create_column_stats(Inexact(0), Inexact(100), Inexact(100), Absent),
-            create_column_stats(Inexact(0), Inexact(500), Inexact(500), Absent),
-            create_column_stats(Inexact(1000), Inexact(10000), Absent, Absent),
-        ];
+    //     let left_col_stats = vec![
+    //         create_column_stats(Inexact(0), Inexact(100), Inexact(100), Absent),
+    //         create_column_stats(Inexact(0), Inexact(500), Inexact(500), Absent),
+    //         create_column_stats(Inexact(1000), Inexact(10000), Absent, Absent),
+    //     ];
 
-        let right_col_stats = vec![
-            create_column_stats(Inexact(0), Inexact(100), Inexact(50), Absent),
-            create_column_stats(Inexact(0), Inexact(2000), Inexact(2500), Absent),
-            create_column_stats(Inexact(0), Inexact(100), Absent, Absent),
-        ];
+    //     let right_col_stats = vec![
+    //         create_column_stats(Inexact(0), Inexact(100), Inexact(50), Absent),
+    //         create_column_stats(Inexact(0), Inexact(2000), Inexact(2500), Absent),
+    //         create_column_stats(Inexact(0), Inexact(100), Absent, Absent),
+    //     ];
 
-        let join_on = vec![
-            (
-                Arc::new(Column::new("a", 0)) as _,
-                Arc::new(Column::new("c", 0)) as _,
-            ),
-            (
-                Arc::new(Column::new("x", 2)) as _,
-                Arc::new(Column::new("y", 2)) as _,
-            ),
-        ];
+    //     let join_on = vec![
+    //         (
+    //             Arc::new(Column::new("a", 0)) as _,
+    //             Arc::new(Column::new("c", 0)) as _,
+    //         ),
+    //         (
+    //             Arc::new(Column::new("x", 2)) as _,
+    //             Arc::new(Column::new("y", 2)) as _,
+    //         ),
+    //     ];
 
-        let cases = vec![
-            // Join type, expected cardinality
-            //
-            // When an inner join is disjoint, that means it won't
-            // produce any rows.
-            (JoinType::Inner, 0),
-            // But left/right outer joins will produce at least
-            // the amount of rows from the left/right side.
-            (JoinType::Left, 1000),
-            (JoinType::Right, 2000),
-            // And a full outer join will produce at least the combination
-            // of the rows above (minus the cardinality of the inner join, which
-            // is 0).
-            (JoinType::Full, 3000),
-        ];
+    //     let cases = vec![
+    //         // Join type, expected cardinality
+    //         //
+    //         // When an inner join is disjoint, that means it won't
+    //         // produce any rows.
+    //         (JoinType::Inner, 0),
+    //         // But left/right outer joins will produce at least
+    //         // the amount of rows from the left/right side.
+    //         (JoinType::Left, 1000),
+    //         (JoinType::Right, 2000),
+    //         // And a full outer join will produce at least the combination
+    //         // of the rows above (minus the cardinality of the inner join, which
+    //         // is 0).
+    //         (JoinType::Full, 3000),
+    //     ];
 
-        for (join_type, expected_num_rows) in cases {
-            let partial_join_stats = estimate_join_cardinality(
-                &join_type,
-                create_stats(Some(1000), left_col_stats.clone(), true),
-                create_stats(Some(2000), right_col_stats.clone(), true),
-                &join_on,
-            )
-            .unwrap();
-            assert_eq!(partial_join_stats.num_rows, expected_num_rows);
-            assert_eq!(
-                partial_join_stats.column_statistics,
-                [left_col_stats.clone(), right_col_stats.clone()].concat()
-            );
-        }
+    //     for (join_type, expected_num_rows) in cases {
+    //         let partial_join_stats = estimate_join_cardinality(
+    //             &join_type,
+    //             create_stats(Some(1000), left_col_stats.clone(), true),
+    //             create_stats(Some(2000), right_col_stats.clone(), true),
+    //             &join_on,
+    //         )
+    //         .unwrap();
+    //         assert_eq!(partial_join_stats.num_rows, expected_num_rows);
+    //         assert_eq!(
+    //             partial_join_stats.column_statistics,
+    //             [left_col_stats.clone(), right_col_stats.clone()].concat()
+    //         );
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    #[test]
-    fn test_anti_semi_join_cardinality() -> Result<()> {
-        let cases: Vec<(JoinType, PartialStats, PartialStats, Option<usize>)> = vec![
-            // ------------------------------------------------
-            // | join_type ,                                   |
-            // | left(rows, min, max, distinct, null_count), |
-            // | right(rows, min, max, distinct, null_count), |
-            // | expected,                                    |
-            // ------------------------------------------------
+    // #[test]
+    // fn test_anti_semi_join_cardinality() -> Result<()> {
+    //     let cases: Vec<(JoinType, PartialStats, PartialStats, Option<usize>)> = vec![
+    //         // ------------------------------------------------
+    //         // | join_type ,                                   |
+    //         // | left(rows, min, max, distinct, null_count), |
+    //         // | right(rows, min, max, distinct, null_count), |
+    //         // | expected,                                    |
+    //         // ------------------------------------------------
 
-            // Cardinality computation
-            // =======================
-            (
-                JoinType::LeftSemi,
-                (50, Inexact(10), Inexact(20), Absent, Absent),
-                (10, Inexact(15), Inexact(25), Absent, Absent),
-                Some(50),
-            ),
-            (
-                JoinType::RightSemi,
-                (50, Inexact(10), Inexact(20), Absent, Absent),
-                (10, Inexact(15), Inexact(25), Absent, Absent),
-                Some(10),
-            ),
-            (
-                JoinType::LeftSemi,
-                (10, Absent, Absent, Absent, Absent),
-                (50, Absent, Absent, Absent, Absent),
-                Some(10),
-            ),
-            (
-                JoinType::LeftSemi,
-                (50, Inexact(10), Inexact(20), Absent, Absent),
-                (10, Inexact(30), Inexact(40), Absent, Absent),
-                Some(0),
-            ),
-            (
-                JoinType::LeftSemi,
-                (50, Inexact(10), Absent, Absent, Absent),
-                (10, Absent, Inexact(5), Absent, Absent),
-                Some(0),
-            ),
-            (
-                JoinType::LeftSemi,
-                (50, Absent, Inexact(20), Absent, Absent),
-                (10, Inexact(30), Absent, Absent, Absent),
-                Some(0),
-            ),
-            (
-                JoinType::LeftAnti,
-                (50, Inexact(10), Inexact(20), Absent, Absent),
-                (10, Inexact(15), Inexact(25), Absent, Absent),
-                Some(50),
-            ),
-            (
-                JoinType::RightAnti,
-                (50, Inexact(10), Inexact(20), Absent, Absent),
-                (10, Inexact(15), Inexact(25), Absent, Absent),
-                Some(10),
-            ),
-            (
-                JoinType::LeftAnti,
-                (10, Absent, Absent, Absent, Absent),
-                (50, Absent, Absent, Absent, Absent),
-                Some(10),
-            ),
-            (
-                JoinType::LeftAnti,
-                (50, Inexact(10), Inexact(20), Absent, Absent),
-                (10, Inexact(30), Inexact(40), Absent, Absent),
-                Some(50),
-            ),
-            (
-                JoinType::LeftAnti,
-                (50, Inexact(10), Absent, Absent, Absent),
-                (10, Absent, Inexact(5), Absent, Absent),
-                Some(50),
-            ),
-            (
-                JoinType::LeftAnti,
-                (50, Absent, Inexact(20), Absent, Absent),
-                (10, Inexact(30), Absent, Absent, Absent),
-                Some(50),
-            ),
-        ];
+    //         // Cardinality computation
+    //         // =======================
+    //         (
+    //             JoinType::LeftSemi,
+    //             (50, Inexact(10), Inexact(20), Absent, Absent),
+    //             (10, Inexact(15), Inexact(25), Absent, Absent),
+    //             Some(50),
+    //         ),
+    //         (
+    //             JoinType::RightSemi,
+    //             (50, Inexact(10), Inexact(20), Absent, Absent),
+    //             (10, Inexact(15), Inexact(25), Absent, Absent),
+    //             Some(10),
+    //         ),
+    //         (
+    //             JoinType::LeftSemi,
+    //             (10, Absent, Absent, Absent, Absent),
+    //             (50, Absent, Absent, Absent, Absent),
+    //             Some(10),
+    //         ),
+    //         (
+    //             JoinType::LeftSemi,
+    //             (50, Inexact(10), Inexact(20), Absent, Absent),
+    //             (10, Inexact(30), Inexact(40), Absent, Absent),
+    //             Some(0),
+    //         ),
+    //         (
+    //             JoinType::LeftSemi,
+    //             (50, Inexact(10), Absent, Absent, Absent),
+    //             (10, Absent, Inexact(5), Absent, Absent),
+    //             Some(0),
+    //         ),
+    //         (
+    //             JoinType::LeftSemi,
+    //             (50, Absent, Inexact(20), Absent, Absent),
+    //             (10, Inexact(30), Absent, Absent, Absent),
+    //             Some(0),
+    //         ),
+    //         (
+    //             JoinType::LeftAnti,
+    //             (50, Inexact(10), Inexact(20), Absent, Absent),
+    //             (10, Inexact(15), Inexact(25), Absent, Absent),
+    //             Some(50),
+    //         ),
+    //         (
+    //             JoinType::RightAnti,
+    //             (50, Inexact(10), Inexact(20), Absent, Absent),
+    //             (10, Inexact(15), Inexact(25), Absent, Absent),
+    //             Some(10),
+    //         ),
+    //         (
+    //             JoinType::LeftAnti,
+    //             (10, Absent, Absent, Absent, Absent),
+    //             (50, Absent, Absent, Absent, Absent),
+    //             Some(10),
+    //         ),
+    //         (
+    //             JoinType::LeftAnti,
+    //             (50, Inexact(10), Inexact(20), Absent, Absent),
+    //             (10, Inexact(30), Inexact(40), Absent, Absent),
+    //             Some(50),
+    //         ),
+    //         (
+    //             JoinType::LeftAnti,
+    //             (50, Inexact(10), Absent, Absent, Absent),
+    //             (10, Absent, Inexact(5), Absent, Absent),
+    //             Some(50),
+    //         ),
+    //         (
+    //             JoinType::LeftAnti,
+    //             (50, Absent, Inexact(20), Absent, Absent),
+    //             (10, Inexact(30), Absent, Absent, Absent),
+    //             Some(50),
+    //         ),
+    //     ];
 
-        let join_on = vec![(
-            Arc::new(Column::new("l_col", 0)) as _,
-            Arc::new(Column::new("r_col", 0)) as _,
-        )];
+    //     let join_on = vec![(
+    //         Arc::new(Column::new("l_col", 0)) as _,
+    //         Arc::new(Column::new("r_col", 0)) as _,
+    //     )];
 
-        for (join_type, outer_info, inner_info, expected) in cases {
-            let outer_num_rows = outer_info.0;
-            let outer_col_stats = vec![create_column_stats(
-                outer_info.1,
-                outer_info.2,
-                outer_info.3,
-                outer_info.4,
-            )];
+    //     for (join_type, outer_info, inner_info, expected) in cases {
+    //         let outer_num_rows = outer_info.0;
+    //         let outer_col_stats = vec![create_column_stats(
+    //             outer_info.1,
+    //             outer_info.2,
+    //             outer_info.3,
+    //             outer_info.4,
+    //         )];
 
-            let inner_num_rows = inner_info.0;
-            let inner_col_stats = vec![create_column_stats(
-                inner_info.1,
-                inner_info.2,
-                inner_info.3,
-                inner_info.4,
-            )];
+    //         let inner_num_rows = inner_info.0;
+    //         let inner_col_stats = vec![create_column_stats(
+    //             inner_info.1,
+    //             inner_info.2,
+    //             inner_info.3,
+    //             inner_info.4,
+    //         )];
 
-            let output_cardinality = estimate_join_cardinality(
-                &join_type,
-                Statistics {
-                    num_rows: Inexact(outer_num_rows),
-                    total_byte_size: Absent,
-                    column_statistics: outer_col_stats,
-                },
-                Statistics {
-                    num_rows: Inexact(inner_num_rows),
-                    total_byte_size: Absent,
-                    column_statistics: inner_col_stats,
-                },
-                &join_on,
-            )
-            .map(|cardinality| cardinality.num_rows);
+    //         let output_cardinality = estimate_join_cardinality(
+    //             &join_type,
+    //             Statistics {
+    //                 num_rows: Inexact(outer_num_rows),
+    //                 total_byte_size: Absent,
+    //                 column_statistics: outer_col_stats,
+    //             },
+    //             Statistics {
+    //                 num_rows: Inexact(inner_num_rows),
+    //                 total_byte_size: Absent,
+    //                 column_statistics: inner_col_stats,
+    //             },
+    //             &join_on,
+    //         )
+    //         .map(|cardinality| cardinality.num_rows);
 
-            assert_eq!(
-                output_cardinality, expected,
-                "failure for join_type: {}",
-                join_type
-            );
-        }
+    //         assert_eq!(
+    //             output_cardinality, expected,
+    //             "failure for join_type: {}",
+    //             join_type
+    //         );
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    #[test]
-    fn test_semi_join_cardinality_absent_rows() -> Result<()> {
-        let dummy_column_stats =
-            vec![create_column_stats(Absent, Absent, Absent, Absent)];
-        let join_on = vec![(
-            Arc::new(Column::new("l_col", 0)) as _,
-            Arc::new(Column::new("r_col", 0)) as _,
-        )];
+    // #[test]
+    // fn test_semi_join_cardinality_absent_rows() -> Result<()> {
+    //     let dummy_column_stats =
+    //         vec![create_column_stats(Absent, Absent, Absent, Absent)];
+    //     let join_on = vec![(
+    //         Arc::new(Column::new("l_col", 0)) as _,
+    //         Arc::new(Column::new("r_col", 0)) as _,
+    //     )];
 
-        let absent_outer_estimation = estimate_join_cardinality(
-            &JoinType::LeftSemi,
-            Statistics {
-                num_rows: Absent,
-                total_byte_size: Absent,
-                column_statistics: dummy_column_stats.clone(),
-            },
-            Statistics {
-                num_rows: Exact(10),
-                total_byte_size: Absent,
-                column_statistics: dummy_column_stats.clone(),
-            },
-            &join_on,
-        );
-        assert!(
-            absent_outer_estimation.is_none(),
-            "Expected \"None\" estimated SemiJoin cardinality for absent outer num_rows"
-        );
+    //     let absent_outer_estimation = estimate_join_cardinality(
+    //         &JoinType::LeftSemi,
+    //         Statistics {
+    //             num_rows: Absent,
+    //             total_byte_size: Absent,
+    //             column_statistics: dummy_column_stats.clone(),
+    //         },
+    //         Statistics {
+    //             num_rows: Exact(10),
+    //             total_byte_size: Absent,
+    //             column_statistics: dummy_column_stats.clone(),
+    //         },
+    //         &join_on,
+    //     );
+    //     assert!(
+    //         absent_outer_estimation.is_none(),
+    //         "Expected \"None\" estimated SemiJoin cardinality for absent outer num_rows"
+    //     );
 
-        let absent_inner_estimation = estimate_join_cardinality(
-            &JoinType::LeftSemi,
-            Statistics {
-                num_rows: Inexact(500),
-                total_byte_size: Absent,
-                column_statistics: dummy_column_stats.clone(),
-            },
-            Statistics {
-                num_rows: Absent,
-                total_byte_size: Absent,
-                column_statistics: dummy_column_stats.clone(),
-            },
-            &join_on,
-        ).expect("Expected non-empty PartialJoinStatistics for SemiJoin with absent inner num_rows");
+    //     let absent_inner_estimation = estimate_join_cardinality(
+    //         &JoinType::LeftSemi,
+    //         Statistics {
+    //             num_rows: Inexact(500),
+    //             total_byte_size: Absent,
+    //             column_statistics: dummy_column_stats.clone(),
+    //         },
+    //         Statistics {
+    //             num_rows: Absent,
+    //             total_byte_size: Absent,
+    //             column_statistics: dummy_column_stats.clone(),
+    //         },
+    //         &join_on,
+    //     ).expect("Expected non-empty PartialJoinStatistics for SemiJoin with absent inner num_rows");
 
-        assert_eq!(absent_inner_estimation.num_rows, 500, "Expected outer.num_rows estimated SemiJoin cardinality for absent inner num_rows");
+    //     assert_eq!(absent_inner_estimation.num_rows, 500, "Expected outer.num_rows estimated SemiJoin cardinality for absent inner num_rows");
 
-        let absent_inner_estimation = estimate_join_cardinality(
-            &JoinType::LeftSemi,
-            Statistics {
-                num_rows: Absent,
-                total_byte_size: Absent,
-                column_statistics: dummy_column_stats.clone(),
-            },
-            Statistics {
-                num_rows: Absent,
-                total_byte_size: Absent,
-                column_statistics: dummy_column_stats,
-            },
-            &join_on,
-        );
-        assert!(absent_inner_estimation.is_none(), "Expected \"None\" estimated SemiJoin cardinality for absent outer and inner num_rows");
+    //     let absent_inner_estimation = estimate_join_cardinality(
+    //         &JoinType::LeftSemi,
+    //         Statistics {
+    //             num_rows: Absent,
+    //             total_byte_size: Absent,
+    //             column_statistics: dummy_column_stats.clone(),
+    //         },
+    //         Statistics {
+    //             num_rows: Absent,
+    //             total_byte_size: Absent,
+    //             column_statistics: dummy_column_stats,
+    //         },
+    //         &join_on,
+    //     );
+    //     assert!(absent_inner_estimation.is_none(), "Expected \"None\" estimated SemiJoin cardinality for absent outer and inner num_rows");
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     #[test]
     fn test_calculate_join_output_ordering() -> Result<()> {

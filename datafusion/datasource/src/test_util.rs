@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use arrow::datatypes::SchemaRef;
 use datafusion_common::{Result, Statistics};
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_plan::metrics::ExecutionPlanMetricsSet;
 use object_store::ObjectStore;
 
@@ -30,7 +31,7 @@ use object_store::ObjectStore;
 #[derive(Clone, Default)]
 pub(crate) struct MockSource {
     metrics: ExecutionPlanMetricsSet,
-    projected_statistics: Option<Statistics>,
+    projected_statistics: Option<TableStatistics>,
 }
 
 impl FileSource for MockSource {
@@ -59,7 +60,7 @@ impl FileSource for MockSource {
         Arc::new(Self { ..self.clone() })
     }
 
-    fn with_statistics(&self, statistics: Statistics) -> Arc<dyn FileSource> {
+    fn with_statistics(&self, statistics: TableStatistics) -> Arc<dyn FileSource> {
         let mut source = self.clone();
         source.projected_statistics = Some(statistics);
         Arc::new(source)
@@ -69,7 +70,7 @@ impl FileSource for MockSource {
         &self.metrics
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         Ok(self
             .projected_statistics
             .as_ref()

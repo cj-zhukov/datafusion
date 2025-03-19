@@ -660,7 +660,7 @@ mod tests {
                 ObjectStoreUrl::parse("test:///").unwrap(),
                 file_schema,
                 Arc::new(MockSource::default()),
-            )
+            )?
             .with_file_group(file_group)
             .with_limit(self.limit);
             let metrics_set = ExecutionPlanMetricsSet::new();

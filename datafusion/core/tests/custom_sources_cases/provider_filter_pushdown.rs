@@ -37,6 +37,7 @@ use datafusion_catalog::Session;
 use datafusion_common::cast::as_primitive_array;
 use datafusion_common::{internal_err, not_impl_err};
 use datafusion_expr::expr::{BinaryExpr, Cast};
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_functions_aggregate::expr_fn::count;
 use datafusion_physical_expr::EquivalenceProperties;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
@@ -140,10 +141,10 @@ impl ExecutionPlan for CustomPlan {
         )))
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         // here we could provide more accurate statistics
         // but we want to test the filter pushdown not the CBOs
-        Ok(Statistics::new_unknown(&self.schema()))
+        TableStatistics::new_unknown(&self.schema())
     }
 }
 

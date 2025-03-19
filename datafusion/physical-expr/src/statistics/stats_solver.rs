@@ -24,7 +24,7 @@ use crate::utils::{build_dag, ExprTreeNode};
 
 use arrow::datatypes::{DataType, Schema};
 use datafusion_common::{Result, ScalarValue};
-use datafusion_expr::statistics::Distribution;
+use datafusion_expr::statistics::ProbabilityDistribution;
 use datafusion_expr_common::interval_arithmetic::Interval;
 
 use petgraph::adj::DefaultIx;
@@ -46,21 +46,21 @@ pub struct ExprStatisticsGraph {
 #[derive(Clone, Debug)]
 pub struct ExprStatisticsGraphNode {
     expr: Arc<dyn PhysicalExpr>,
-    dist: Distribution,
+    dist: ProbabilityDistribution,
 }
 
 impl ExprStatisticsGraphNode {
     /// Constructs a new DAEG node based on the given interval with a
     /// `Uniform` distribution.
     fn new_uniform(expr: Arc<dyn PhysicalExpr>, interval: Interval) -> Result<Self> {
-        Distribution::new_uniform(interval)
+        ProbabilityDistribution::new_uniform(interval)
             .map(|dist| ExprStatisticsGraphNode { expr, dist })
     }
 
     /// Constructs a new DAEG node with a `Bernoulli` distribution having an
     /// unknown success probability.
     fn new_bernoulli(expr: Arc<dyn PhysicalExpr>) -> Result<Self> {
-        Distribution::new_bernoulli(ScalarValue::Float64(None))
+        ProbabilityDistribution::new_bernoulli(ScalarValue::Float64(None))
             .map(|dist| ExprStatisticsGraphNode { expr, dist })
     }
 
@@ -68,13 +68,13 @@ impl ExprStatisticsGraphNode {
     /// definite summary statistics.
     fn new_generic(expr: Arc<dyn PhysicalExpr>, dt: &DataType) -> Result<Self> {
         let interval = Interval::make_unbounded(dt)?;
-        let dist = Distribution::new_from_interval(interval)?;
+        let dist = ProbabilityDistribution::new_from_interval(interval)?;
         Ok(ExprStatisticsGraphNode { expr, dist })
     }
 
     /// Get the [`Distribution`] object representing the statistics of the
     /// expression.
-    pub fn distribution(&self) -> &Distribution {
+    pub fn distribution(&self) -> &ProbabilityDistribution {
         &self.dist
     }
 
@@ -114,7 +114,7 @@ impl ExprStatisticsGraph {
     /// This function assigns given distributions to expressions in the DAEG.
     /// The argument `assignments` associates indices of sought expressions
     /// with their corresponding new distributions.
-    pub fn assign_statistics(&mut self, assignments: &[(usize, Distribution)]) {
+    pub fn assign_statistics(&mut self, assignments: &[(usize, ProbabilityDistribution)]) {
         for (index, stats) in assignments {
             let node_index = NodeIndex::from(*index as DefaultIx);
             self.graph[node_index].dist = stats.clone();
@@ -123,7 +123,7 @@ impl ExprStatisticsGraph {
 
     /// Computes statistics/distributions for an expression via a bottom-up
     /// traversal.
-    pub fn evaluate_statistics(&mut self) -> Result<&Distribution> {
+    pub fn evaluate_statistics(&mut self) -> Result<&ProbabilityDistribution> {
         let mut dfs = DfsPostOrder::new(&self.graph, self.root);
         while let Some(idx) = dfs.next(&self.graph) {
             let neighbors = self.graph.neighbors_directed(idx, Outgoing);
@@ -146,7 +146,7 @@ impl ExprStatisticsGraph {
     /// of leaf nodes.
     pub fn propagate_statistics(
         &mut self,
-        given_stats: Distribution,
+        given_stats: ProbabilityDistribution,
     ) -> Result<PropagationResult> {
         // Adjust the root node with the given statistics:
         let root_range = self.graph[self.root].dist.range()?;
@@ -161,7 +161,7 @@ impl ExprStatisticsGraph {
                     given_stats
                 } else {
                     // Intersecting ranges gives us a more precise range:
-                    Distribution::new_from_interval(interval)?
+                    ProbabilityDistribution::new_from_interval(interval)?
                 };
             }
         } else {
@@ -213,7 +213,7 @@ mod tests {
     use datafusion_common::{Result, ScalarValue};
     use datafusion_expr_common::interval_arithmetic::Interval;
     use datafusion_expr_common::operator::Operator;
-    use datafusion_expr_common::statistics::Distribution;
+    use datafusion_expr_common::statistics::ProbabilityDistribution;
     use datafusion_expr_common::type_coercion::binary::BinaryTypeCoercer;
     use datafusion_physical_expr_common::physical_expr::PhysicalExpr;
 
@@ -256,30 +256,30 @@ mod tests {
         graph.assign_statistics(&[
             (
                 0usize,
-                Distribution::new_uniform(Interval::make(Some(0.), Some(1.))?)?,
+                ProbabilityDistribution::new_uniform(Interval::make(Some(0.), Some(1.))?)?,
             ),
             (
                 1usize,
-                Distribution::new_uniform(Interval::make(Some(0.), Some(2.))?)?,
+                ProbabilityDistribution::new_uniform(Interval::make(Some(0.), Some(2.))?)?,
             ),
             (
                 3usize,
-                Distribution::new_uniform(Interval::make(Some(1.), Some(3.))?)?,
+                ProbabilityDistribution::new_uniform(Interval::make(Some(1.), Some(3.))?)?,
             ),
             (
                 4usize,
-                Distribution::new_uniform(Interval::make(Some(1.), Some(5.))?)?,
+                ProbabilityDistribution::new_uniform(Interval::make(Some(1.), Some(5.))?)?,
             ),
         ]);
         let ev_stats = graph.evaluate_statistics()?;
         assert_eq!(
             ev_stats,
-            &Distribution::new_bernoulli(ScalarValue::Float64(None))?
+            &ProbabilityDistribution::new_bernoulli(ScalarValue::Float64(None))?
         );
 
         let one = ScalarValue::new_one(&DataType::Float64)?;
         assert_eq!(
-            graph.propagate_statistics(Distribution::new_bernoulli(one)?)?,
+            graph.propagate_statistics(ProbabilityDistribution::new_bernoulli(one)?)?,
             PropagationResult::Success
         );
         Ok(())

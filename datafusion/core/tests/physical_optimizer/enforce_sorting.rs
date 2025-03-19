@@ -70,6 +70,7 @@ fn csv_exec_ordered(
         schema.clone(),
         Arc::new(CsvSource::new(true, 0, b'"')),
     )
+    .unwrap()
     .with_file(PartitionedFile::new("file_path".to_string(), 100))
     .with_output_ordering(vec![sort_exprs])
     .build()
@@ -88,6 +89,7 @@ pub fn parquet_exec_sorted(
         schema.clone(),
         source,
     )
+    .unwrap()
     .with_file(PartitionedFile::new("x".to_string(), 100))
     .with_output_ordering(vec![sort_exprs])
     .build()
@@ -105,6 +107,7 @@ fn csv_exec_sorted(
         schema.clone(),
         Arc::new(CsvSource::new(false, 0, 0)),
     )
+    .unwrap()
     .with_file(PartitionedFile::new("x".to_string(), 100))
     .with_output_ordering(vec![sort_exprs])
     .build()

@@ -35,6 +35,7 @@ use datafusion::datasource::source::DataSourceExec;
 use datafusion_common::error::Result;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion_common::ScalarValue;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_expr::{JoinType, Operator};
 use datafusion_physical_expr::expressions::{BinaryExpr, Column, Literal};
 use datafusion_physical_expr::PhysicalExpr;
@@ -62,7 +63,7 @@ use datafusion_physical_plan::union::UnionExec;
 use datafusion_physical_plan::ExecutionPlanProperties;
 use datafusion_physical_plan::PlanProperties;
 use datafusion_physical_plan::{
-    get_plan_string, DisplayAs, DisplayFormatType, Statistics,
+    get_plan_string, DisplayAs, DisplayFormatType,
 };
 
 /// Models operators like BoundedWindowExec that require an input
@@ -166,7 +167,7 @@ impl ExecutionPlan for SortRequiredExec {
         unreachable!();
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         self.input.statistics()
     }
 }
@@ -188,6 +189,7 @@ fn parquet_exec_multiple_sorted(
         schema(),
         Arc::new(ParquetSource::default()),
     )
+    .unwrap()
     .with_file_groups(vec![
         vec![PartitionedFile::new("x".to_string(), 100)],
         vec![PartitionedFile::new("y".to_string(), 100)],
@@ -206,6 +208,7 @@ fn csv_exec_with_sort(output_ordering: Vec<LexOrdering>) -> Arc<DataSourceExec> 
         schema(),
         Arc::new(CsvSource::new(false, b',', b'"')),
     )
+    .unwrap()
     .with_file(PartitionedFile::new("x".to_string(), 100))
     .with_output_ordering(output_ordering)
     .build()
@@ -222,6 +225,7 @@ fn csv_exec_multiple_sorted(output_ordering: Vec<LexOrdering>) -> Arc<DataSource
         schema(),
         Arc::new(CsvSource::new(false, b',', b'"')),
     )
+    .unwrap()
     .with_file_groups(vec![
         vec![PartitionedFile::new("x".to_string(), 100)],
         vec![PartitionedFile::new("y".to_string(), 100)],
@@ -2531,7 +2535,7 @@ fn parallelization_compressed_csv() -> Result<()> {
                 ObjectStoreUrl::parse("test:///").unwrap(),
                 schema(),
                 Arc::new(CsvSource::new(false, b',', b'"')),
-            )
+            )?
             .with_file(PartitionedFile::new("x".to_string(), 100))
             .with_file_compression_type(compression_type)
             .build(),

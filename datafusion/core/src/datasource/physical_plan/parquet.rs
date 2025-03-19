@@ -183,6 +183,7 @@ mod tests {
                 file_schema,
                 Arc::new(source.clone()),
             )
+            .unwrap()
             .with_file_group(file_group)
             .with_projection(projection);
 
@@ -810,7 +811,7 @@ mod tests {
                 ObjectStoreUrl::local_filesystem(),
                 file_schema,
                 Arc::new(ParquetSource::default()),
-            )
+            )?
             .with_file_groups(file_groups)
             .build();
             assert_eq!(
@@ -910,7 +911,7 @@ mod tests {
         ]);
 
         let source = Arc::new(ParquetSource::default());
-        let parquet_exec = FileScanConfig::new(object_store_url, schema.clone(), source)
+        let parquet_exec = FileScanConfig::new(object_store_url, schema.clone(), source)?
             .with_file(partitioned_file)
             // file has 10 cols so index 12 should be month and 13 should be day
             .with_projection(Some(vec![0, 1, 2, 12, 13]))
@@ -987,7 +988,7 @@ mod tests {
             ObjectStoreUrl::local_filesystem(),
             file_schema,
             Arc::new(ParquetSource::default()),
-        )
+        )?
         .with_file(partitioned_file)
         .build();
 
@@ -1615,6 +1616,7 @@ mod tests {
                 .with_metadata_size_hint(456),
         );
         let exec = FileScanConfig::new(store_url, schema, source)
+            .unwrap()
             .with_file(
                 PartitionedFile {
                     object_meta: ObjectMeta {

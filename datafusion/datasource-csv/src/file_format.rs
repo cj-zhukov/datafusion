@@ -30,7 +30,7 @@ use datafusion_catalog::Session;
 use datafusion_common::config::{ConfigField, ConfigFileType, CsvOptions};
 use datafusion_common::file_options::csv_writer::CsvWriterOptions;
 use datafusion_common::{
-    exec_err, not_impl_err, DataFusionError, GetExt, Result, Statistics,
+    exec_err, not_impl_err, DataFusionError, GetExt, Result,
     DEFAULT_CSV_EXTENSION,
 };
 use datafusion_common_runtime::SpawnedTask;
@@ -48,6 +48,7 @@ use datafusion_datasource::write::orchestration::spawn_writer_tasks_and_join;
 use datafusion_datasource::write::BatchSerializer;
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
 use datafusion_expr::dml::InsertOp;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::PhysicalExpr;
 use datafusion_physical_expr_common::sort_expr::LexRequirement;
 
@@ -399,8 +400,8 @@ impl FileFormat for CsvFormat {
         _store: &Arc<dyn ObjectStore>,
         table_schema: SchemaRef,
         _object: &ObjectMeta,
-    ) -> Result<Statistics> {
-        Ok(Statistics::new_unknown(&table_schema))
+    ) -> Result<TableStatistics> {
+        TableStatistics::new_unknown(&table_schema)
     }
 
     async fn create_physical_plan(

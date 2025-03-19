@@ -38,6 +38,7 @@ use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion_common::{internal_err, DataFusionError, Result};
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::EquivalenceProperties;
 
 use futures::Stream;
@@ -254,7 +255,7 @@ impl ExecutionPlan for MockExec {
     }
 
     // Panics if one of the batches is an error
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         let data: Result<Vec<_>> = self
             .data
             .iter()
@@ -266,11 +267,11 @@ impl ExecutionPlan for MockExec {
 
         let data = data?;
 
-        Ok(common::compute_record_batch_statistics(
+        common::compute_record_batch_statistics(
             &[data],
             &self.schema,
             None,
-        ))
+        )
     }
 }
 
@@ -404,12 +405,12 @@ impl ExecutionPlan for BarrierExec {
         Ok(builder.build())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
-        Ok(common::compute_record_batch_statistics(
+    fn statistics(&self) -> Result<TableStatistics> {
+        common::compute_record_batch_statistics(
             &self.data,
             &self.schema,
             None,
-        ))
+        )
     }
 }
 
@@ -502,12 +503,13 @@ impl ExecutionPlan for ErrorExec {
 /// A mock execution plan that simply returns the provided statistics
 #[derive(Debug, Clone)]
 pub struct StatisticsExec {
-    stats: Statistics,
+    stats: TableStatistics,
     schema: Arc<Schema>,
     cache: PlanProperties,
 }
+
 impl StatisticsExec {
-    pub fn new(stats: Statistics, schema: Schema) -> Self {
+    pub fn new(stats: TableStatistics, schema: Schema) -> Self {
         assert_eq!(
             stats
                 .column_statistics.len(), schema.fields().len(),
@@ -587,7 +589,7 @@ impl ExecutionPlan for StatisticsExec {
         unimplemented!("This plan only serves for testing statistics")
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         Ok(self.stats.clone())
     }
 }

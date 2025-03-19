@@ -31,6 +31,7 @@ use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
 use datafusion_common::{internal_err, Result};
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::EquivalenceProperties;
 
 use log::trace;
@@ -149,15 +150,15 @@ impl ExecutionPlan for EmptyExec {
         )?))
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         let batch = self
             .data()
             .expect("Create empty RecordBatch should not fail");
-        Ok(common::compute_record_batch_statistics(
+        common::compute_record_batch_statistics(
             &[batch],
             &self.schema,
             None,
-        ))
+        )
     }
 }
 

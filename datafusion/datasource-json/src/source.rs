@@ -32,6 +32,7 @@ use datafusion_datasource::file_stream::{FileOpenFuture, FileOpener};
 use datafusion_datasource::{
     calculate_range, ListingTableUrl, PartitionedFile, RangeCalculation,
 };
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_plan::{ExecutionPlan, ExecutionPlanProperties};
 
 use arrow::json::ReaderBuilder;
@@ -206,7 +207,7 @@ impl ExecutionPlan for NdJsonExec {
         self.inner.execute(partition, context)
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         self.inner.statistics()
     }
 
@@ -253,7 +254,7 @@ impl JsonOpener {
 pub struct JsonSource {
     batch_size: Option<usize>,
     metrics: ExecutionPlanMetricsSet,
-    projected_statistics: Option<Statistics>,
+    projected_statistics: Option<TableStatistics>,
 }
 
 impl JsonSource {
@@ -293,7 +294,7 @@ impl FileSource for JsonSource {
     fn with_schema(&self, _schema: SchemaRef) -> Arc<dyn FileSource> {
         Arc::new(Self { ..self.clone() })
     }
-    fn with_statistics(&self, statistics: Statistics) -> Arc<dyn FileSource> {
+    fn with_statistics(&self, statistics: TableStatistics) -> Arc<dyn FileSource> {
         let mut conf = self.clone();
         conf.projected_statistics = Some(statistics);
         Arc::new(conf)
@@ -307,7 +308,7 @@ impl FileSource for JsonSource {
         &self.metrics
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         let statistics = &self.projected_statistics;
         Ok(statistics
             .clone()

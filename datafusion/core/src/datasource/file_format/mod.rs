@@ -82,7 +82,7 @@ pub(crate) mod test_util {
                     ObjectStoreUrl::local_filesystem(),
                     file_schema,
                     format.file_source(),
-                )
+                )?
                 .with_file_groups(file_groups)
                 .with_statistics(statistics)
                 .with_projection(projection)

@@ -215,6 +215,7 @@ mod tests {
         );
         let base_conf =
             FileScanConfig::new(ObjectStoreUrl::local_filesystem(), schema, source)
+                .unwrap()
                 .with_file(partitioned_file);
 
         let parquet_exec = base_conf.build();

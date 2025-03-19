@@ -88,6 +88,7 @@ async fn route_data_access_ops_to_parquet_file_reader_factory() {
         file_schema,
         source,
     )
+    .unwrap()
     .with_file_group(file_group);
 
     let parquet_exec = base_config.build();

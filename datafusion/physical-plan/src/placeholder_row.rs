@@ -29,6 +29,7 @@ use arrow::array::{RecordBatch, RecordBatchOptions};
 use arrow::datatypes::{DataType, Field, Fields, Schema, SchemaRef};
 use datafusion_common::{internal_err, Result};
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::EquivalenceProperties;
 
 use log::trace;
@@ -168,15 +169,15 @@ impl ExecutionPlan for PlaceholderRowExec {
         )?))
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         let batch = self
             .data()
             .expect("Create single row placeholder RecordBatch should not fail");
-        Ok(common::compute_record_batch_statistics(
+        common::compute_record_batch_statistics(
             &[batch],
             &self.schema,
             None,
-        ))
+        )
     }
 }
 

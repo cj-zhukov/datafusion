@@ -40,10 +40,12 @@ use arrow::compute::{concat, concat_batches};
 use arrow::datatypes::SchemaRef;
 use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
+use arrow_schema::DataType;
 use datafusion_common::stats::Precision;
 use datafusion_common::utils::{evaluate_partition_ranges, transpose};
 use datafusion_common::{internal_err, Result};
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
 use datafusion_physical_expr_common::sort_expr::{LexOrdering, LexRequirement};
 
 use futures::{ready, Stream, StreamExt};
@@ -270,7 +272,7 @@ impl ExecutionPlan for WindowAggExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         let input_stat = self.input.statistics()?;
         let win_cols = self.window_expr.len();
         let input_cols = self.input.schema().fields().len();
@@ -279,12 +281,13 @@ impl ExecutionPlan for WindowAggExec {
         // copy stats of the input to the beginning of the schema.
         column_statistics.extend(input_stat.column_statistics);
         for _ in 0..win_cols {
-            column_statistics.push(ColumnStatistics::new_unknown())
+            column_statistics.push(ColumnStatisticsNew::new_unknown()?)
         }
-        Ok(Statistics {
+        let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+        Ok(TableStatistics {
             num_rows: input_stat.num_rows,
             column_statistics,
-            total_byte_size: Precision::Absent,
+            total_byte_size,
         })
     }
 }

@@ -62,6 +62,7 @@ async fn multi_parquet_coercion() {
     let source = Arc::new(ParquetSource::default());
     let conf =
         FileScanConfig::new(ObjectStoreUrl::local_filesystem(), file_schema, source)
+            .unwrap()
             .with_file_group(file_group);
 
     let parquet_exec = conf.build();
@@ -119,6 +120,7 @@ async fn multi_parquet_coercion_projection() {
         file_schema,
         Arc::new(ParquetSource::default()),
     )
+    .unwrap()
     .with_file_group(file_group)
     .with_projection(Some(vec![1, 0, 2]))
     .build();

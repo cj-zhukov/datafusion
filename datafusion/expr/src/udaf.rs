@@ -27,6 +27,7 @@ use std::vec;
 use arrow::datatypes::{DataType, Field};
 
 use datafusion_common::{exec_err, not_impl_err, Result, ScalarValue, Statistics};
+use datafusion_expr_common::statistics::TableStatistics;
 use datafusion_physical_expr_common::physical_expr::PhysicalExpr;
 
 use crate::expr::{
@@ -103,7 +104,7 @@ impl fmt::Display for AggregateUDF {
 #[derive(Debug)]
 pub struct StatisticsArgs<'a> {
     /// The statistics of the aggregate input
-    pub statistics: &'a Statistics,
+    pub statistics: &'a TableStatistics,
     /// The resolved return type of the aggregate function
     pub return_type: &'a DataType,
     /// Whether the aggregate function is distinct.

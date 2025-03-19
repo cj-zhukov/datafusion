@@ -286,6 +286,7 @@ async fn execute_with_predicate(
         schema.clone(),
         Arc::new(parquet_source),
     )
+    .unwrap()
     .with_file_group(
         files
             .iter()

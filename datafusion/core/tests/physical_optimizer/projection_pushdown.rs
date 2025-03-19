@@ -370,6 +370,7 @@ fn create_simple_csv_exec() -> Arc<dyn ExecutionPlan> {
         schema,
         Arc::new(CsvSource::new(false, 0, 0)),
     )
+    .unwrap()
     .with_file(PartitionedFile::new("x".to_string(), 100))
     .with_projection(Some(vec![0, 1, 2, 3, 4]))
     .build()
@@ -387,6 +388,7 @@ fn create_projecting_csv_exec() -> Arc<dyn ExecutionPlan> {
         schema,
         Arc::new(CsvSource::new(false, 0, 0)),
     )
+    .unwrap()
     .with_file(PartitionedFile::new("x".to_string(), 100))
     .with_projection(Some(vec![3, 2, 1]))
     .build()
@@ -1396,6 +1398,7 @@ fn partitioned_data_source() -> Arc<DataSourceExec> {
         file_schema.clone(),
         Arc::new(CsvSource::default()),
     )
+    .unwrap()
     .with_file(PartitionedFile::new("x".to_string(), 100))
     .with_table_partition_cols(vec![Field::new("partition_col", DataType::Utf8, true)])
     .with_projection(Some(vec![0, 1, 2]))

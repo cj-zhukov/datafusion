@@ -91,7 +91,7 @@ pub fn scan_partitioned_csv(
         work_dir,
     )?;
     let source = Arc::new(CsvSource::new(true, b'"', b'"'));
-    let config = partitioned_csv_config(schema, file_groups, source)
+    let config = partitioned_csv_config(schema, file_groups, source)?
         .with_file_compression_type(FileCompressionType::UNCOMPRESSED);
     Ok(config.build())
 }

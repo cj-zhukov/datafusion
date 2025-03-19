@@ -30,7 +30,7 @@ use datafusion_common::{internal_err, not_impl_err, Result, ScalarValue};
 use datafusion_expr_common::columnar_value::ColumnarValue;
 use datafusion_expr_common::interval_arithmetic::Interval;
 use datafusion_expr_common::sort_properties::ExprProperties;
-use datafusion_expr_common::statistics::Distribution;
+use datafusion_expr_common::statistics::ProbabilityDistribution;
 
 use itertools::izip;
 
@@ -171,7 +171,7 @@ pub trait PhysicalExpr: Send + Sync + Display + Debug + DynEq + DynHash {
     /// statistics accordingly. The default implementation simply creates an
     /// unknown output distribution by combining input ranges. This logic loses
     /// distribution information, but is a safe default.
-    fn evaluate_statistics(&self, children: &[&Distribution]) -> Result<Distribution> {
+    fn evaluate_statistics(&self, children: &[&ProbabilityDistribution]) -> Result<ProbabilityDistribution> {
         let children_ranges = children
             .iter()
             .map(|c| c.range())
@@ -187,9 +187,9 @@ pub trait PhysicalExpr: Send + Sync + Display + Debug + DynEq + DynHash {
             } else {
                 ScalarValue::try_from(&dt)
             }?;
-            Distribution::new_bernoulli(p)
+            ProbabilityDistribution::new_bernoulli(p)
         } else {
-            Distribution::new_from_interval(output_interval)
+            ProbabilityDistribution::new_from_interval(output_interval)
         }
     }
 
@@ -221,9 +221,9 @@ pub trait PhysicalExpr: Send + Sync + Display + Debug + DynEq + DynHash {
     /// information, but is a safe default.
     fn propagate_statistics(
         &self,
-        parent: &Distribution,
-        children: &[&Distribution],
-    ) -> Result<Option<Vec<Distribution>>> {
+        parent: &ProbabilityDistribution,
+        children: &[&ProbabilityDistribution],
+    ) -> Result<Option<Vec<ProbabilityDistribution>>> {
         let children_ranges = children
             .iter()
             .map(|c| c.range())
@@ -249,9 +249,9 @@ pub trait PhysicalExpr: Send + Sync + Display + Debug + DynEq + DynHash {
                     } else {
                         unreachable!("Given that we have a range reduction for a boolean interval, we should have certainty")
                     }?;
-                    Distribution::new_bernoulli(p)
+                    ProbabilityDistribution::new_bernoulli(p)
                 } else {
-                    Distribution::new_from_interval(new_interval)
+                    ProbabilityDistribution::new_from_interval(new_interval)
                 }
             })
             .collect::<Result<_>>()

@@ -57,6 +57,7 @@ use datafusion_common::{
 };
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryReservation};
 use datafusion_execution::TaskContext;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_expr::JoinType;
 use datafusion_physical_expr::equivalence::{
     join_equivalence_properties, ProjectionMapping,
@@ -557,7 +558,7 @@ impl ExecutionPlan for NestedLoopJoinExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         estimate_join_statistics(
             Arc::clone(&self.left),
             Arc::clone(&self.right),

@@ -74,6 +74,7 @@ pub fn parquet_exec(schema: &SchemaRef) -> Arc<DataSourceExec> {
         schema.clone(),
         Arc::new(ParquetSource::default()),
     )
+    .unwrap()
     .with_file(PartitionedFile::new("x".to_string(), 100))
     .build()
 }
@@ -87,6 +88,7 @@ pub(crate) fn parquet_exec_with_sort(
         schema(),
         Arc::new(ParquetSource::default()),
     )
+    .unwrap()
     .with_file(PartitionedFile::new("x".to_string(), 100))
     .with_output_ordering(output_ordering)
     .build()

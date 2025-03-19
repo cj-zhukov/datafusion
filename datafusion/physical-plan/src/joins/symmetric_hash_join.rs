@@ -71,6 +71,7 @@ use datafusion_common::{internal_err, plan_err, HashSet, JoinSide, JoinType, Res
 use datafusion_execution::memory_pool::MemoryConsumer;
 use datafusion_execution::TaskContext;
 use datafusion_expr::interval_arithmetic::Interval;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::equivalence::join_equivalence_properties;
 use datafusion_physical_expr::intervals::cp_solver::ExprIntervalGraph;
 use datafusion_physical_expr::PhysicalExprRef;
@@ -468,9 +469,9 @@ impl ExecutionPlan for SymmetricHashJoinExec {
         Some(self.metrics.clone_inner())
     }
 
-    fn statistics(&self) -> Result<Statistics> {
+    fn statistics(&self) -> Result<TableStatistics> {
         // TODO stats: it is not possible in general to know the output size of joins
-        Ok(Statistics::new_unknown(&self.schema()))
+        TableStatistics::new_unknown(&self.schema())
     }
 
     fn execute(
