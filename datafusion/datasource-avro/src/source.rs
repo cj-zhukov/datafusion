@@ -26,7 +26,7 @@ use crate::avro_to_arrow::Reader as AvroReader;
 use datafusion_common::error::Result;
 
 use arrow::datatypes::SchemaRef;
-use datafusion_common::{Constraints, Statistics};
+use datafusion_common::Constraints;
 use datafusion_datasource::file::FileSource;
 use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_datasource::file_stream::FileOpener;

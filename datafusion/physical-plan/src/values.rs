@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use crate::execution_plan::{Boundedness, EmissionType};
 use crate::memory::MemoryStream;
-use crate::{common, DisplayAs, PlanProperties, SendableRecordBatchStream, Statistics};
+use crate::{common, DisplayAs, PlanProperties, SendableRecordBatchStream};
 use crate::{
     ColumnarValue, DisplayFormatType, ExecutionPlan, Partitioning, PhysicalExpr,
 };
@@ -238,7 +238,7 @@ mod tests {
     use crate::test::{self, make_partition};
 
     use arrow::datatypes::{DataType, Field};
-    use datafusion_common::stats::{ColumnStatistics, Precision};
+    use datafusion_common::stats::ColumnStatistics;
 
     #[tokio::test]
     async fn values_empty_case() -> Result<()> {

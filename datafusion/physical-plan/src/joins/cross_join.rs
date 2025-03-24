@@ -33,21 +33,18 @@ use crate::projection::{
     physical_to_column_exprs, ProjectionExec,
 };
 use crate::{
-    handle_state, ColumnStatistics, DisplayAs, DisplayFormatType, Distribution,
+    handle_state, DisplayAs, DisplayFormatType, Distribution,
     ExecutionPlan, ExecutionPlanProperties, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream, Statistics,
+    SendableRecordBatchStream,
 };
 
 use arrow::array::{RecordBatch, RecordBatchOptions};
 use arrow::compute::concat_batches;
 use arrow::datatypes::{Fields, Schema, SchemaRef};
-use datafusion_common::stats::Precision;
 use datafusion_common::{internal_err, JoinType, Result, ScalarValue};
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryReservation};
 use datafusion_execution::TaskContext;
-use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
-use datafusion_expr::Operator;
+use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::equivalence::join_equivalence_properties;
 
 use async_trait::async_trait;

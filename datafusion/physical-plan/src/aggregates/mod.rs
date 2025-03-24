@@ -31,14 +31,13 @@ use crate::projection::get_field_metadata;
 use crate::windows::get_ordered_partition_by_indices;
 use crate::{
     DisplayFormatType, Distribution, ExecutionPlan, InputOrderMode,
-    SendableRecordBatchStream, Statistics,
+    SendableRecordBatchStream,
 };
 
 use arrow::array::{ArrayRef, UInt16Array, UInt32Array, UInt64Array, UInt8Array};
 use arrow::datatypes::{Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use arrow_schema::DataType;
-use datafusion_common::stats::Precision;
 use datafusion_common::{internal_err, not_impl_err, Constraint, Constraints, Result, ScalarValue};
 use datafusion_execution::TaskContext;
 use datafusion_expr::interval_arithmetic::Interval;
@@ -941,7 +940,7 @@ impl ExecutionPlan for AggregateExec {
                 if self.group_by.expr.is_empty() =>
             {
                 let num_rows = ProbabilityDistribution::new_uniform(Interval::make(Some(1), Some(1))?)?;
-                let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+                let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
                 Ok(TableStatistics {
                     num_rows,
                     column_statistics,
@@ -952,17 +951,17 @@ impl ExecutionPlan for AggregateExec {
                 // When the input row count is 0 or 1, we can adopt that statistic keeping its reliability.
                 // When it is larger than 1, we degrade the precision since it may decrease after aggregation.
                 let num_rows = self.input().statistics()?.num_rows;
-                let num_rows = if num_rows.as_ref() > &ScalarValue::new_one(&DataType::UInt64)? {
+                let num_rows = if num_rows.get_value().unwrap_or(&ScalarValue::Null) > &ScalarValue::new_one(&DataType::UInt64)? {
                     self.input().statistics()?.num_rows.to_inexact()?
-                } else if num_rows.as_ref() == &ScalarValue::new_zero(&DataType::UInt64)? {
+                } else if num_rows.get_value().unwrap_or(&ScalarValue::Null) == &ScalarValue::new_zero(&DataType::UInt64)? {
                     let n_rows = self.input().statistics()?.num_rows;
-                    let to_add = ProbabilityDistribution::new_uniform(Interval::make(Some(1), Some(1))?)?;
+                    let to_add = ProbabilityDistribution::new_exact(ScalarValue::new_one(&DataType::UInt64)?)?;
                     self.input().statistics()?.num_rows = new_generic_from_binary_op(&Operator::Plus, &n_rows, &to_add)?;
                     self.input().statistics()?.num_rows
                 } else {
                     self.input().statistics()?.num_rows
                 };
-                let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+                let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
                 Ok(TableStatistics {
                     num_rows,
                     column_statistics,

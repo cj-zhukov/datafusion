@@ -21,8 +21,8 @@ use std::sync::Arc;
 use std::task::{ready, Context, Poll};
 
 use super::{
-    ColumnStatistics, DisplayAs, ExecutionPlanProperties, PlanProperties,
-    RecordBatchStream, SendableRecordBatchStream, Statistics,
+    DisplayAs, ExecutionPlanProperties, PlanProperties,
+    RecordBatchStream, SendableRecordBatchStream,
 };
 use crate::common::can_project;
 use crate::execution_plan::CardinalityEffect;
@@ -39,13 +39,11 @@ use arrow::compute::filter_record_batch;
 use arrow::datatypes::{DataType, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion_common::cast::as_boolean_array;
-use datafusion_common::stats::Precision;
 use datafusion_common::{
-    internal_err, plan_err, project_schema, DataFusionError, Result, ScalarValue,
+    internal_err, plan_err, project_schema, DataFusionError, Result,
 };
 use datafusion_execution::TaskContext;
-use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::ProjectionMapping;
 use datafusion_physical_expr::expressions::BinaryExpr;
@@ -271,10 +269,10 @@ impl FilterExec {
             .map(|column| {
                 let value = stats.column_statistics[column.index()]
                     .min_value
-                    .as_ref();
+                    .get_value();
                 let expr = Arc::new(column) as _;
                 ConstExpr::new(expr)
-                    .with_across_partitions(AcrossPartitions::Uniform(Some(value.clone())))
+                    .with_across_partitions(AcrossPartitions::Uniform(value.cloned()))
             });
         // This is for statistics
         eq_properties = eq_properties.with_constants(constants);
@@ -447,9 +445,9 @@ impl EmbeddedProjection for FilterExec {
 /// is adjusted by using the next/previous value for its data type to convert
 /// it into a closed bound.
 fn collect_new_statistics(
-    input_column_stats: &[ColumnStatisticsNew],
+    input_column_stats: &[ColumnStatistics],
     analysis_boundaries: Vec<ExprBoundaries>,
-) -> Vec<ColumnStatisticsNew> {
+) -> Vec<ColumnStatistics> {
     analysis_boundaries
         .into_iter()
         .enumerate()
@@ -464,21 +462,21 @@ fn collect_new_statistics(
             )| {
                 let Some(interval) = interval else {
                     // If the interval is `None`, we can say that there are no rows:
-                    return ColumnStatisticsNew {
-                        null_count: ProbabilityDistribution::new_uniform_zero(&DataType::UInt64).unwrap(),
-                        max_value: ProbabilityDistribution::new_uniform_zero(&DataType::UInt64).unwrap(),
-                        min_value: ProbabilityDistribution::new_uniform_zero(&DataType::UInt64).unwrap(),
-                        sum_value: ProbabilityDistribution::new_uniform_zero(&DataType::UInt64).unwrap(),
+                    return ColumnStatistics {
+                        null_count: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap(),
+                        max_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap(),
+                        min_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap(),
+                        sum_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap(),
                         distinct_count,
                     };
                 };
                 let min_value = ProbabilityDistribution::new_from_interval(interval.clone()).unwrap();
                 let max_value = ProbabilityDistribution::new_from_interval(interval).unwrap();
-                ColumnStatisticsNew {
+                ColumnStatistics {
                     null_count: input_column_stats[idx].null_count.clone().to_inexact().unwrap(),
                     max_value,
                     min_value,
-                    sum_value: ProbabilityDistribution::new_generic_unknown(&DataType::UInt64).unwrap(),
+                    sum_value: ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap(),
                     distinct_count: distinct_count.to_inexact().unwrap(),
                 }
             },

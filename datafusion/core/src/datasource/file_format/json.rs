@@ -42,7 +42,6 @@ mod tests {
     use arrow::json::ReaderBuilder;
     use arrow::util::pretty;
     use datafusion_common::cast::as_int64_array;
-    use datafusion_common::stats::Precision;
     use datafusion_common::{assert_batches_eq, internal_err};
 
     use datafusion_common::Result;

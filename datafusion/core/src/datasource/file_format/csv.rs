@@ -34,7 +34,6 @@ mod tests {
     use datafusion_catalog::Session;
     use datafusion_common::cast::as_string_array;
     use datafusion_common::internal_err;
-    use datafusion_common::stats::Precision;
     use datafusion_common::test_util::arrow_test_data;
     use datafusion_common::{assert_batches_eq, Result};
     use datafusion_datasource::decoder::{

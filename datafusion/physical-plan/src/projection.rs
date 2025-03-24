@@ -30,22 +30,21 @@ use super::expressions::{CastExpr, Column, Literal};
 use super::metrics::{BaselineMetrics, ExecutionPlanMetricsSet, MetricsSet};
 use super::{
     DisplayAs, ExecutionPlanProperties, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream, Statistics,
+    SendableRecordBatchStream,
 };
 use crate::execution_plan::CardinalityEffect;
 use crate::joins::utils::{ColumnIndex, JoinFilter};
-use crate::{ColumnStatistics, DisplayFormatType, ExecutionPlan, PhysicalExpr};
+use crate::{DisplayFormatType, ExecutionPlan, PhysicalExpr};
 
 use arrow::datatypes::{Field, Schema, SchemaRef};
 use arrow::record_batch::{RecordBatch, RecordBatchOptions};
-use datafusion_common::stats::Precision;
 use datafusion_common::tree_node::{
     Transformed, TransformedResult, TreeNode, TreeNodeRecursion,
 };
 use datafusion_common::{internal_err, JoinSide, Result};
 use datafusion_execution::TaskContext;
 use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::ProjectionMapping;
 use datafusion_physical_expr::utils::collect_columns;
@@ -306,7 +305,7 @@ fn stats_projection(
         } else {
             // TODO stats: estimate more statistics from expressions
             // (expressions should compute their statistics themselves)
-            ColumnStatisticsNew::new_unknown()?
+            ColumnStatistics::new_unknown()?
         };
         column_statistics.push(col_stats);
         if let Ok(data_type) = expr.data_type(&schema) {
@@ -1018,7 +1017,7 @@ mod tests {
     use crate::test;
 
     use arrow::datatypes::DataType;
-    use datafusion_common::ScalarValue;
+    use datafusion_common::{ColumnStatistics, ScalarValue};
 
     use datafusion_expr::Operator;
     use datafusion_physical_expr::expressions::{BinaryExpr, Column, Literal};
@@ -1111,35 +1110,35 @@ mod tests {
         Ok(())
     }
 
-    fn get_stats() -> Statistics {
-        Statistics {
-            num_rows: Precision::Exact(5),
-            total_byte_size: Precision::Exact(23),
-            column_statistics: vec![
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(5),
-                    max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
-                    min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
-                    sum_value: Precision::Exact(ScalarValue::Int64(Some(42))),
-                    null_count: Precision::Exact(0),
-                },
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(1),
-                    max_value: Precision::Exact(ScalarValue::from("x")),
-                    min_value: Precision::Exact(ScalarValue::from("a")),
-                    sum_value: Precision::Absent,
-                    null_count: Precision::Exact(3),
-                },
-                ColumnStatistics {
-                    distinct_count: Precision::Absent,
-                    max_value: Precision::Exact(ScalarValue::Float32(Some(1.1))),
-                    min_value: Precision::Exact(ScalarValue::Float32(Some(0.1))),
-                    sum_value: Precision::Exact(ScalarValue::Float32(Some(5.5))),
-                    null_count: Precision::Absent,
-                },
-            ],
-        }
-    }
+    // fn get_stats() -> Statistics {
+    //     Statistics {
+    //         num_rows: Precision::Exact(5),
+    //         total_byte_size: Precision::Exact(23),
+    //         column_statistics: vec![
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(5),
+    //                 max_value: Precision::Exact(ScalarValue::Int64(Some(21))),
+    //                 min_value: Precision::Exact(ScalarValue::Int64(Some(-4))),
+    //                 sum_value: Precision::Exact(ScalarValue::Int64(Some(42))),
+    //                 null_count: Precision::Exact(0),
+    //             },
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Exact(1),
+    //                 max_value: Precision::Exact(ScalarValue::from("x")),
+    //                 min_value: Precision::Exact(ScalarValue::from("a")),
+    //                 sum_value: Precision::Absent,
+    //                 null_count: Precision::Exact(3),
+    //             },
+    //             ColumnStatistics {
+    //                 distinct_count: Precision::Absent,
+    //                 max_value: Precision::Exact(ScalarValue::Float32(Some(1.1))),
+    //                 min_value: Precision::Exact(ScalarValue::Float32(Some(0.1))),
+    //                 sum_value: Precision::Exact(ScalarValue::Float32(Some(5.5))),
+    //                 null_count: Precision::Absent,
+    //             },
+    //         ],
+    //     }
+    // }
 
     fn get_schema() -> Schema {
         let field_0 = Field::new("col0", DataType::Int64, false);

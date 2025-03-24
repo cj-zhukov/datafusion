@@ -26,10 +26,9 @@ use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion_common::config::ConfigOptions;
 use datafusion_common::JoinSide;
-use datafusion_common::{stats::Precision, ColumnStatistics, JoinType, ScalarValue};
-use datafusion_common::{Result, Statistics};
+use datafusion_common::{JoinType, ScalarValue, Result};
 use datafusion_execution::{RecordBatchStream, SendableRecordBatchStream, TaskContext};
-use datafusion_expr::statistics::TableStatistics;
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::expressions::col;
 use datafusion_physical_expr::expressions::{BinaryExpr, Column, NegativeExpr};
@@ -55,11 +54,11 @@ use futures::Stream;
 use rstest::rstest;
 
 /// Return statistics for empty table
-fn empty_statistics() -> Statistics {
-    Statistics {
-        num_rows: Precision::Absent,
-        total_byte_size: Precision::Absent,
-        column_statistics: vec![ColumnStatistics::new_unknown()],
+fn empty_statistics() -> TableStatistics {
+    TableStatistics {
+        num_rows: ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+        total_byte_size: ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+        column_statistics: vec![ColumnStatistics::new_unknown().unwrap_or_default()],
     }
 }
 
@@ -75,33 +74,45 @@ fn get_thresholds() -> (usize, usize) {
 /// Return statistics for small table
 fn small_statistics() -> TableStatistics {
     let (threshold_num_rows, threshold_byte_size) = get_thresholds();
-    // Statistics {
-    //     num_rows: Precision::Inexact(threshold_num_rows / 128),
-    //     total_byte_size: Precision::Inexact(threshold_byte_size / 128),
-    //     column_statistics: vec![ColumnStatistics::new_unknown()],
-    // }
-    todo!()
+    let n_rows = ScalarValue::UInt64(Some(threshold_num_rows as u64 / 128));
+    let num_rows = ProbabilityDistribution::new_exact(n_rows).unwrap_or_default();
+    let total_bytes = ScalarValue::UInt64(Some(threshold_byte_size as u64 / 128 as u64));
+    let total_byte_size = ProbabilityDistribution::new_exact(total_bytes).unwrap_or_default();
+    TableStatistics {
+        num_rows,
+        total_byte_size,
+        column_statistics: vec![ColumnStatistics::new_unknown().unwrap_or_default()],
+    }
 }
 
 /// Return statistics for big table
 fn big_statistics() -> TableStatistics {
     let (threshold_num_rows, threshold_byte_size) = get_thresholds();
-    // Statistics {
-    //     num_rows: Precision::Inexact(threshold_num_rows * 2),
-    //     total_byte_size: Precision::Inexact(threshold_byte_size * 2),
-    //     column_statistics: vec![ColumnStatistics::new_unknown()],
-    // }
-    todo!()
+    let n_rows = ScalarValue::UInt64(Some(threshold_num_rows as u64 * 2));
+    let num_rows = ProbabilityDistribution::new_exact(n_rows).unwrap_or_default();
+    let total_bytes = ScalarValue::UInt64(Some(threshold_byte_size as u64 * 2));
+    let total_byte_size = ProbabilityDistribution::new_exact(total_bytes).unwrap_or_default();
+    TableStatistics {
+        num_rows,
+        total_byte_size,
+        column_statistics: vec![ColumnStatistics::new_unknown().unwrap_or_default()],
+    }
 }
 
 /// Return statistics for big table
-fn bigger_statistics() -> Statistics {
-    let (threshold_num_rows, threshold_byte_size) = get_thresholds();
-    Statistics {
-        num_rows: Precision::Inexact(threshold_num_rows * 4),
-        total_byte_size: Precision::Inexact(threshold_byte_size * 4),
-        column_statistics: vec![ColumnStatistics::new_unknown()],
-    }
+fn bigger_statistics() -> TableStatistics {
+    // let (threshold_num_rows, threshold_byte_size) = get_thresholds();
+    // let (threshold_num_rows, threshold_byte_size) = get_thresholds();
+    // let n_rows = ScalarValue::UInt64(Some(threshold_num_rows * 4 as u64));
+    // let num_rows = ProbabilityDistribution::new_exact(n_rows).unwrap_or_default();
+    // let total_bytes = ScalarValue::UInt64(Some(threshold_byte_size * 4 as u64));
+    // let total_byte_size = ProbabilityDistribution::new_exact(total_bytes).unwrap_or_default();
+    // TableStatistics {
+    //     num_rows: Precision::Inexact(threshold_num_rows * 4),
+    //     total_byte_size: Precision::Inexact(threshold_byte_size * 4),
+    //     column_statistics: vec![ColumnStatistics::new_unknown()],
+    // }
+    todo!()
 }
 
 fn create_big_and_small() -> (Arc<dyn ExecutionPlan>, Arc<dyn ExecutionPlan>) {
@@ -127,18 +138,23 @@ fn create_column_stats(
     max: Option<u64>,
     distinct_count: Option<usize>,
 ) -> Vec<ColumnStatistics> {
-    vec![ColumnStatistics {
-        distinct_count: distinct_count
-            .map(Precision::Inexact)
-            .unwrap_or(Precision::Absent),
-        min_value: min
-            .map(|size| Precision::Inexact(ScalarValue::UInt64(Some(size))))
-            .unwrap_or(Precision::Absent),
-        max_value: max
-            .map(|size| Precision::Inexact(ScalarValue::UInt64(Some(size))))
-            .unwrap_or(Precision::Absent),
-        ..Default::default()
-    }]
+    let distinct_count = distinct_count.map(|v| v as u64);
+    let distinct_count = ScalarValue::UInt64(distinct_count);
+    let min_value = ScalarValue::UInt64(min);
+    let max_value = ScalarValue::UInt64(max);
+    // vec![ColumnStatistics {
+    //     distinct_count: distinct_count
+    //         .map(Precision::Inexact)
+    //         .unwrap_or(Precision::Absent),
+    //     min_value: min
+    //         .map(|size| Precision::Inexact(ScalarValue::UInt64(Some(size))))
+    //         .unwrap_or(Precision::Absent),
+    //     max_value: max
+    //         .map(|size| Precision::Inexact(ScalarValue::UInt64(Some(size))))
+    //         .unwrap_or(Precision::Absent),
+    //     ..Default::default()
+    // }]
+    todo!()
 }
 
 /// Create join filter for NLJoinExec with expression `big_col > small_col`

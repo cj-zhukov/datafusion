@@ -61,7 +61,7 @@ use crate::metrics::{BaselineMetrics, ExecutionPlanMetricsSet, MetricsSet};
 use crate::sorts::sort::sort_batch;
 use crate::{
     DisplayAs, DisplayFormatType, Distribution, ExecutionPlan, ExecutionPlanProperties,
-    Partitioning, PlanProperties, SendableRecordBatchStream, Statistics,
+    Partitioning, PlanProperties, SendableRecordBatchStream,
 };
 
 use arrow::compute::concat_batches;

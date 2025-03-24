@@ -26,7 +26,7 @@ use std::vec;
 
 use arrow::datatypes::{DataType, Field};
 
-use datafusion_common::{exec_err, not_impl_err, Result, ScalarValue, Statistics};
+use datafusion_common::{exec_err, not_impl_err, Result, ScalarValue};
 use datafusion_expr_common::statistics::TableStatistics;
 use datafusion_physical_expr_common::physical_expr::PhysicalExpr;
 

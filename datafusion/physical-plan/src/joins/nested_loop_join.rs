@@ -53,7 +53,7 @@ use arrow::compute::concat_batches;
 use arrow::datatypes::{Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion_common::{
-    exec_datafusion_err, internal_err, project_schema, JoinSide, Result, Statistics,
+    exec_datafusion_err, internal_err, project_schema, JoinSide, Result,
 };
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryReservation};
 use datafusion_execution::TaskContext;

@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use arrow_schema::DataType;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use futures::{Stream, StreamExt};
 use datafusion_common::ScalarValue;
@@ -46,9 +46,9 @@ pub async fn get_statistics_with_limit(
     // - zero for summations, and
     // - neutral element for extreme points.
     let size = file_schema.fields().len();
-    let mut col_stats_set = vec![ColumnStatisticsNew::new_unknown()?; size];
-    let mut num_rows = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
-    let mut total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+    let mut col_stats_set = vec![ColumnStatistics::new_unknown()?; size];
+    let mut num_rows = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+    let mut total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
     let limit_value = limit.map(|v| v as _).unwrap_or(u64::MAX);
     let limit = ScalarValue::UInt64(Some(limit_value));
 
@@ -76,12 +76,8 @@ pub async fn get_statistics_with_limit(
         // files. This only applies when we know the number of rows. It also
         // currently ignores tables that have no statistics regarding the
         // number of rows.
-        let conservative_num_rows = if num_rows.as_ref().is_null() {
-            ScalarValue::UInt64(Some(u64::MIN))
-        } else {
-            num_rows.as_ref().clone()
-        };
-        if conservative_num_rows <= limit {
+        let conservative_num_rows = num_rows.get_value().unwrap_or(&ScalarValue::UInt64(Some(u64::MIN)));
+        if conservative_num_rows <= &limit {
             while let Some(current) = all_files.next().await {
                 let (mut file, file_stats) = current?;
                 file.statistics = Some(file_stats.as_ref().clone());
@@ -94,17 +90,17 @@ pub async fn get_statistics_with_limit(
                 // counts across all the files in question. If any file does not
                 // provide any information or provides an inexact value, we demote
                 // the statistic precision to inexact.
-                num_rows = add_row_stats(file_stats.num_rows.clone(), num_rows)?;
+                num_rows = new_generic_from_binary_op(&Operator::Plus, &file_stats.num_rows, &num_rows)?;
 
                 total_byte_size =
-                    add_row_stats(file_stats.total_byte_size.clone(), total_byte_size)?;
+                    new_generic_from_binary_op(&Operator::Plus, &file_stats.total_byte_size, &total_byte_size)?;
 
                 for (file_col_stats, col_stats) in file_stats
                     .column_statistics
                     .iter()
                     .zip(col_stats_set.iter_mut())
                 {
-                    let ColumnStatisticsNew {
+                    let ColumnStatistics {
                         null_count: file_nc,
                         max_value: file_max,
                         min_value: file_min,
@@ -112,7 +108,7 @@ pub async fn get_statistics_with_limit(
                         distinct_count: _,
                     } = file_col_stats;
 
-                    col_stats.null_count = add_row_stats(file_nc.clone(), col_stats.null_count.clone())?;
+                    col_stats.null_count = new_generic_from_binary_op(&Operator::Plus, &file_nc, &col_stats.null_count)?;
                     set_max_if_greater(file_max, &mut col_stats.max_value);
                     set_min_if_lesser(file_min, &mut col_stats.min_value);
                     col_stats.sum_value = new_generic_from_binary_op(&Operator::Plus, file_sum, &col_stats.sum_value)?;
@@ -122,11 +118,7 @@ pub async fn get_statistics_with_limit(
                 // files. This only applies when we know the number of rows. It also
                 // currently ignores tables that have no statistics regarding the
                 // number of rows.
-                let num_rows = if num_rows.as_ref().is_null() {
-                    &ScalarValue::UInt64(Some(u64::MIN))
-                } else {
-                    num_rows.as_ref()
-                };
+                let num_rows = num_rows.get_value().unwrap_or(&ScalarValue::UInt64(Some(u64::MIN)));
                 if num_rows > &limit {
                     break;
                 }
@@ -147,16 +139,6 @@ pub async fn get_statistics_with_limit(
     }
 
     Ok((result_files, statistics))
-}
-
-fn add_row_stats(
-    file_num_rows: ProbabilityDistribution,
-    num_row: ProbabilityDistribution,
-) -> Result<ProbabilityDistribution> {
-    match (file_num_rows, &num_row) {
-        (lhs, rhs) => new_generic_from_binary_op(&Operator::Plus, &lhs, &rhs),
-        _ => unimplemented!(),
-    }
 }
 
 /// If the given value is numerically greater than the original maximum value,
@@ -188,7 +170,9 @@ fn set_max_if_greater(
     //     }
     //     _ => {}
     // }
-    todo!()
+    if max_nominee.get_value().unwrap_or(&ScalarValue::Null) < max_value.get_value().unwrap_or(&ScalarValue::Null) {
+        *max_value = max_nominee.clone();
+    }
 }
 
 /// If the given value is numerically lesser than the original minimum value,
@@ -220,5 +204,7 @@ fn set_min_if_lesser(
     //     }
     //     _ => {}
     // }
-    todo!()
+    if min_nominee.get_value().unwrap_or(&ScalarValue::Null) > min_value.get_value().unwrap_or(&ScalarValue::Null) {
+        *min_value = min_nominee.clone();
+    }
 }

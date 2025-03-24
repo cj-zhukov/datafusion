@@ -25,7 +25,7 @@ use std::task::{Context, Poll};
 use super::metrics::{BaselineMetrics, ExecutionPlanMetricsSet, MetricsSet};
 use super::{
     DisplayAs, ExecutionPlanProperties, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream, Statistics,
+    SendableRecordBatchStream,
 };
 use crate::execution_plan::{Boundedness, CardinalityEffect};
 use crate::{DisplayFormatType, Distribution, ExecutionPlan, Partitioning};

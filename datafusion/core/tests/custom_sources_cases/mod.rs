@@ -31,15 +31,13 @@ use datafusion::logical_expr::{
     col, Expr, LogicalPlan, LogicalPlanBuilder, TableScan, UNNAMED_TABLE,
 };
 use datafusion::physical_plan::{
-    collect, ColumnStatistics, DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning,
-    RecordBatchStream, SendableRecordBatchStream, Statistics,
+    collect, DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning,
+    RecordBatchStream, SendableRecordBatchStream,
 };
-use datafusion::scalar::ScalarValue;
 use datafusion_catalog::Session;
 use datafusion_common::cast::as_primitive_array;
-use datafusion_common::project_schema;
-use datafusion_common::stats::Precision;
-use datafusion_expr::statistics::TableStatistics;
+use datafusion_common::{project_schema, ScalarValue};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_physical_expr::EquivalenceProperties;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion_physical_plan::placeholder_row::PlaceholderRowExec;
@@ -181,28 +179,35 @@ impl ExecutionPlan for CustomExecutionPlan {
     }
 
     fn statistics(&self) -> Result<TableStatistics> {
-        // let batch = TEST_CUSTOM_RECORD_BATCH!().unwrap();
-        // Ok(Statistics {
-        //     num_rows: Precision::Exact(batch.num_rows()),
-        //     total_byte_size: Precision::Absent,
-        //     column_statistics: self
-        //         .projection
-        //         .clone()
-        //         .unwrap_or_else(|| (0..batch.columns().len()).collect())
-        //         .iter()
-        //         .map(|i| ColumnStatistics {
-        //             null_count: Precision::Exact(batch.column(*i).null_count()),
-        //             min_value: Precision::Exact(ScalarValue::Int32(aggregate::min(
-        //                 as_primitive_array::<Int32Type>(batch.column(*i)).unwrap(),
-        //             ))),
-        //             max_value: Precision::Exact(ScalarValue::Int32(aggregate::max(
-        //                 as_primitive_array::<Int32Type>(batch.column(*i)).unwrap(),
-        //             ))),
-        //             ..Default::default()
-        //         })
-        //         .collect(),
-        // })
-        todo!()
+        let batch = TEST_CUSTOM_RECORD_BATCH!().unwrap();
+        let n_rows = ScalarValue::UInt64(Some(batch.num_rows() as u64));
+        let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        let num_rows = ProbabilityDistribution::new_exact(n_rows)?;
+        let column_statistics = self.projection
+            .clone()
+            .unwrap_or_else(|| (0..batch.columns().len())
+            .collect())
+            .iter()
+            .map(|i| {
+                let null_count = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(batch.column(*i).null_count() as u64))).unwrap_or_default();
+                let min_val = aggregate::min(as_primitive_array::<Int32Type>(batch.column(*i)).unwrap());
+                let min_value = ProbabilityDistribution::new_exact(ScalarValue::Int32(min_val)).unwrap_or_default();
+                let max_val = ScalarValue::Int32(aggregate::max(as_primitive_array::<Int32Type>(batch.column(*i)).unwrap()));
+                let max_value = ProbabilityDistribution::new_exact(max_val).unwrap_or_default();
+
+                ColumnStatistics {
+                    null_count,
+                    max_value,
+                    min_value,
+                    ..Default::default()
+                }
+            }).collect();
+            
+        Ok(TableStatistics {
+            num_rows,
+            total_byte_size,
+            column_statistics,
+        })
     }
 }
 

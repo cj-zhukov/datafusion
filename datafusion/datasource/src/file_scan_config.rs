@@ -31,12 +31,12 @@ use arrow::{
     buffer::Buffer,
     datatypes::{ArrowNativeType, DataType, Field, Schema, SchemaRef, UInt16Type},
 };
-use datafusion_common::{exec_err, ColumnStatistics, Constraints, Result, Statistics};
+use datafusion_common::{exec_err, Constraints, Result};
 use datafusion_common::{DataFusionError, ScalarValue};
 use datafusion_execution::{
     object_store::ObjectStoreUrl, SendableRecordBatchStream, TaskContext,
 };
-use datafusion_expr::statistics::{ColumnStatisticsNew, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, TableStatistics};
 use datafusion_physical_expr::{
     expressions::Column, EquivalenceProperties, LexOrdering, Partitioning,
     PhysicalSortExpr,
@@ -387,7 +387,7 @@ impl FileScanConfig {
                     statistics.column_statistics[idx].clone()
                 } else {
                     // TODO provide accurate stat for partition column (#1186)
-                    ColumnStatisticsNew::new_unknown().unwrap_or_default()
+                    ColumnStatistics::new_unknown().unwrap_or_default()
                 }
             })
             .collect();

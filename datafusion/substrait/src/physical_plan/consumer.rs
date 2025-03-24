@@ -49,7 +49,7 @@ pub async fn from_substrait_rel(
     rel: &Rel,
     _extensions: &HashMap<u32, &String>,
 ) -> Result<Arc<dyn ExecutionPlan>> {
-    let mut base_config;
+    let mut base_config: FileScanConfig;
 
     let source = Arc::new(ParquetSource::default());
     match &rel.rel_type {
@@ -82,7 +82,7 @@ pub async fn from_substrait_rel(
                         ObjectStoreUrl::local_filesystem(),
                         Arc::new(Schema::new(fields)),
                         source,
-                    );
+                    )?;
                 }
                 Err(e) => return Err(e),
             };
@@ -138,7 +138,7 @@ pub async fn from_substrait_rel(
                         }
                         file_groups[part_index].push(partitioned_file)
                     }
-
+                    
                     base_config = base_config.with_file_groups(file_groups);
 
                     if let Some(MaskExpression { select, .. }) = &read.projection {

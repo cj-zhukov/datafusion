@@ -30,7 +30,7 @@ use datafusion_physical_plan::projection::{
 };
 use datafusion_physical_plan::{
     common, ColumnarValue, DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning,
-    PhysicalExpr, PlanProperties, SendableRecordBatchStream, Statistics,
+    PhysicalExpr, PlanProperties, SendableRecordBatchStream,
 };
 
 use arrow::array::{RecordBatch, RecordBatchOptions};

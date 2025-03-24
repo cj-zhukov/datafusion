@@ -28,9 +28,9 @@ use std::{any::Any, sync::Arc};
 
 use super::{
     metrics::{ExecutionPlanMetricsSet, MetricsSet},
-    ColumnStatistics, DisplayAs, DisplayFormatType, ExecutionPlan,
+    DisplayAs, DisplayFormatType, ExecutionPlan,
     ExecutionPlanProperties, Partitioning, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream, Statistics,
+    SendableRecordBatchStream,
 };
 use crate::execution_plan::{
     boundedness_from_children, emission_type_from_children, InvariantLevel,
@@ -41,10 +41,10 @@ use crate::stream::ObservedStream;
 
 use arrow::datatypes::{Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use datafusion_common::stats::Precision;
+use arrow_schema::DataType;
 use datafusion_common::{exec_err, internal_err, DataFusionError, Result};
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatisticsNew, TableStatistics};
+use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::{calculate_union, EquivalenceProperties};
 
@@ -624,16 +624,15 @@ impl Stream for CombinedRecordBatchStream {
 }
 
 fn col_stats_union(
-    mut left: ColumnStatisticsNew,
-    right: ColumnStatisticsNew,
-) -> ColumnStatisticsNew {
-    // left.distinct_count = Precision::Absent;
-    // left.min_value = left.min_value.min(&right.min_value);
-    // left.max_value = left.max_value.max(&right.max_value);
-    // left.sum_value = left.sum_value.add(&right.sum_value);
-    // left.null_count = left.null_count.add(&right.null_count);
-    // left
-    todo!()
+    mut left: ColumnStatistics,
+    right: ColumnStatistics,
+) -> ColumnStatistics {
+    left.distinct_count = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
+    left.min_value = left.min_value.min(&right.min_value);
+    left.max_value = left.max_value.max(&right.max_value);
+    left.sum_value = new_generic_from_binary_op(&Operator::Plus, &left.sum_value, &right.sum_value).unwrap_or_default();
+    left.null_count = new_generic_from_binary_op(&Operator::Plus, &left.null_count, &right.null_count).unwrap_or_default();
+    left
 }
 
 fn stats_union(mut left: TableStatistics, right: TableStatistics) -> Result<TableStatistics> {
@@ -657,7 +656,6 @@ mod tests {
 
     use arrow::compute::SortOptions;
     use arrow::datatypes::DataType;
-    use datafusion_common::ScalarValue;
     use datafusion_physical_expr::expressions::col;
     use datafusion_physical_expr::{PhysicalExpr, PhysicalSortExpr};
     use datafusion_physical_expr_common::sort_expr::LexOrdering;

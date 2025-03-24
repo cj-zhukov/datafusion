@@ -31,7 +31,6 @@ use datafusion_datasource::schema_adapter::{
 
 use arrow::datatypes::{Schema, SchemaRef};
 use datafusion_common::config::TableParquetOptions;
-use datafusion_common::Statistics;
 use datafusion_datasource::file::FileSource;
 use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_expr::statistics::TableStatistics;

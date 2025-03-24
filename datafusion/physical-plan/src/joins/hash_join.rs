@@ -54,7 +54,7 @@ use crate::{
     },
     metrics::{ExecutionPlanMetricsSet, MetricsSet},
     DisplayAs, DisplayFormatType, Distribution, ExecutionPlan, Partitioning,
-    PlanProperties, RecordBatchStream, SendableRecordBatchStream, Statistics,
+    PlanProperties, RecordBatchStream, SendableRecordBatchStream,
 };
 
 use arrow::array::{

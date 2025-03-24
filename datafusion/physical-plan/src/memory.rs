@@ -25,7 +25,7 @@ use std::task::{Context, Poll};
 use crate::execution_plan::{Boundedness, EmissionType};
 use crate::{
     DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties,
-    RecordBatchStream, SendableRecordBatchStream, Statistics,
+    RecordBatchStream, SendableRecordBatchStream,
 };
 
 use arrow::array::RecordBatch;

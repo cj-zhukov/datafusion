@@ -34,9 +34,9 @@ use crate::windows::{
     window_equivalence_properties,
 };
 use crate::{
-    ColumnStatistics, DisplayAs, DisplayFormatType, Distribution, ExecutionPlan,
+    DisplayAs, DisplayFormatType, Distribution, ExecutionPlan,
     ExecutionPlanProperties, InputOrderMode, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream, Statistics, WindowExpr,
+    SendableRecordBatchStream, WindowExpr,
 };
 use ahash::RandomState;
 use arrow::compute::take_record_batch;
@@ -48,7 +48,6 @@ use arrow::{
 };
 use arrow_schema::DataType;
 use datafusion_common::hash_utils::create_hashes;
-use datafusion_common::stats::Precision;
 use datafusion_common::utils::{
     evaluate_partition_ranges, get_at_indices, get_row_at_idx,
 };
@@ -56,7 +55,7 @@ use datafusion_common::{
     arrow_datafusion_err, exec_err, DataFusionError, HashMap, Result,
 };
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::window_state::{PartitionBatchState, WindowAggState};
 use datafusion_expr::ColumnarValue;
 use datafusion_physical_expr::window::{
@@ -353,9 +352,9 @@ impl ExecutionPlan for BoundedWindowAggExec {
         // copy stats of the input to the beginning of the schema.
         column_statistics.extend(input_stat.column_statistics);
         for _ in 0..win_cols {
-            column_statistics.push(ColumnStatisticsNew::new_unknown()?)
+            column_statistics.push(ColumnStatistics::new_unknown()?)
         }
-        let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+        let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
         Ok(TableStatistics {
             num_rows: input_stat.num_rows,
             column_statistics,

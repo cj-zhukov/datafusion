@@ -25,7 +25,6 @@ use super::metrics::{BaselineMetrics, ExecutionPlanMetricsSet, MetricsSet};
 use super::stream::{ObservedStream, RecordBatchReceiverStream};
 use super::{
     DisplayAs, ExecutionPlanProperties, PlanProperties, SendableRecordBatchStream,
-    Statistics,
 };
 use crate::execution_plan::CardinalityEffect;
 use crate::projection::{make_with_child, ProjectionExec};

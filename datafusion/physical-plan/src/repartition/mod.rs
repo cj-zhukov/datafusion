@@ -38,7 +38,7 @@ use crate::repartition::distributor_channels::{
 };
 use crate::sorts::streaming_merge::StreamingMergeBuilder;
 use crate::stream::RecordBatchStreamAdapter;
-use crate::{DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties, Statistics};
+use crate::{DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties};
 
 use arrow::array::{PrimitiveArray, RecordBatch, RecordBatchOptions};
 use arrow::compute::take_arrays;

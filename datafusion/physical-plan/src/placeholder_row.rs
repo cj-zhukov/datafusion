@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use crate::execution_plan::{Boundedness, EmissionType};
 use crate::memory::MemoryStream;
-use crate::{common, DisplayAs, PlanProperties, SendableRecordBatchStream, Statistics};
+use crate::{common, DisplayAs, PlanProperties, SendableRecordBatchStream};
 use crate::{DisplayFormatType, ExecutionPlan, Partitioning};
 use arrow::array::{ArrayRef, NullArray};
 use arrow::array::{RecordBatch, RecordBatchOptions};

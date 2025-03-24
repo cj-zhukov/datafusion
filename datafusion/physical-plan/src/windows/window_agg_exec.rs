@@ -30,9 +30,9 @@ use crate::windows::{
     window_equivalence_properties,
 };
 use crate::{
-    ColumnStatistics, DisplayAs, DisplayFormatType, Distribution, ExecutionPlan,
+    DisplayAs, DisplayFormatType, Distribution, ExecutionPlan,
     ExecutionPlanProperties, PhysicalExpr, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream, Statistics, WindowExpr,
+    SendableRecordBatchStream, WindowExpr,
 };
 
 use arrow::array::ArrayRef;
@@ -41,11 +41,10 @@ use arrow::datatypes::SchemaRef;
 use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
 use arrow_schema::DataType;
-use datafusion_common::stats::Precision;
 use datafusion_common::utils::{evaluate_partition_ranges, transpose};
 use datafusion_common::{internal_err, Result};
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_physical_expr_common::sort_expr::{LexOrdering, LexRequirement};
 
 use futures::{ready, Stream, StreamExt};
@@ -281,9 +280,9 @@ impl ExecutionPlan for WindowAggExec {
         // copy stats of the input to the beginning of the schema.
         column_statistics.extend(input_stat.column_statistics);
         for _ in 0..win_cols {
-            column_statistics.push(ColumnStatisticsNew::new_unknown()?)
+            column_statistics.push(ColumnStatistics::new_unknown()?)
         }
-        let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+        let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
         Ok(TableStatistics {
             num_rows: input_stat.num_rows,
             column_statistics,

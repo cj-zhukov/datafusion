@@ -36,11 +36,10 @@ use arrow::datatypes::{
     Int16Type, Int32Type, Int64Type, Int8Type, IntervalUnit, UInt16Type, UInt32Type,
     UInt64Type, UInt8Type,
 };
-use datafusion_common::stats::Precision;
 use datafusion_common::{
-    downcast_value, exec_err, internal_err, ColumnStatistics, DataFusionError, Result,
+    downcast_value, exec_err, internal_err, DataFusionError, Result,
 };
-use datafusion_expr::statistics::ColumnStatisticsNew;
+use datafusion_expr::statistics::ColumnStatistics;
 use datafusion_functions_aggregate_common::aggregate::groups_accumulator::prim_op::PrimitiveGroupsAccumulator;
 use datafusion_physical_expr::expressions;
 use std::cmp::Ordering;
@@ -167,17 +166,16 @@ macro_rules! primitive_min_accumulator {
 trait FromColumnStatistics {
     fn value_from_column_statistics(
         &self,
-        stats: &ColumnStatisticsNew,
+        stats: &ColumnStatistics,
     ) -> Option<ScalarValue>;
 
     fn value_from_statistics(
         &self,
         statistics_args: &StatisticsArgs,
     ) -> Option<ScalarValue> {
-        let num_rows = statistics_args.statistics.num_rows.as_ref();
-        match num_rows.is_null() {
-            true => ScalarValue::try_from(statistics_args.return_type).ok(),
-            false => {
+        match statistics_args.statistics.num_rows.get_value() {
+            None => ScalarValue::try_from(statistics_args.return_type).ok(),
+            Some(_) => {
                 let col_stats = &statistics_args.statistics.column_statistics;
                 if statistics_args.exprs.len() == 1 {
                     // TODO optimize with exprs other than Column
@@ -193,19 +191,16 @@ trait FromColumnStatistics {
                 }
             }
         }
+    
     }
 }
 
 impl FromColumnStatistics for Max {
     fn value_from_column_statistics(
         &self,
-        col_stats: &ColumnStatisticsNew,
+        col_stats: &ColumnStatistics,
     ) -> Option<ScalarValue> {
-        let max_value = col_stats.max_value.as_ref();
-        match max_value.is_null() {
-            true => None,
-            false => Some(max_value.clone())
-        }
+        col_stats.max_value.get_value().cloned()
     }
 }
 
@@ -1025,13 +1020,9 @@ impl Default for Min {
 impl FromColumnStatistics for Min {
     fn value_from_column_statistics(
         &self,
-        col_stats: &ColumnStatisticsNew,
+        col_stats: &ColumnStatistics,
     ) -> Option<ScalarValue> {
-        let min_value = col_stats.min_value.as_ref();
-        match min_value.is_null() {
-            true => None,
-            false => Some(min_value.clone())
-        }
+        col_stats.min_value.get_value().cloned()
     }
 }
 

@@ -36,7 +36,7 @@ pub use access_plan::{ParquetAccessPlan, RowGroupAccess};
 use arrow::datatypes::SchemaRef;
 use datafusion_common::config::{ConfigOptions, TableParquetOptions};
 use datafusion_common::Result;
-use datafusion_common::{Constraints, Statistics};
+use datafusion_common::Constraints;
 use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_datasource::schema_adapter::SchemaAdapterFactory;
 use datafusion_datasource::source::DataSourceExec;

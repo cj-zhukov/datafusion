@@ -40,16 +40,14 @@ use datafusion_expr::statistics::TableStatistics;
 use datafusion_expr::{utils::conjunction, Expr, TableProviderFilterPushDown};
 use datafusion_expr::{SortExpr, TableType};
 use datafusion_physical_plan::empty::EmptyExec;
-use datafusion_physical_plan::{ExecutionPlan, Statistics};
+use datafusion_physical_plan::ExecutionPlan;
 
 use arrow::datatypes::{DataType, Field, Schema, SchemaBuilder, SchemaRef};
 use datafusion_common::{
     config_datafusion_err, internal_err, plan_err, project_schema, Constraints,
     SchemaExt, ToDFSchema,
 };
-use datafusion_execution::cache::{
-    cache_manager::FileStatisticsCache, cache_unit::DefaultFileStatisticsCache,
-};
+use datafusion_execution::cache::cache_manager::FileStatisticsCache;
 use datafusion_physical_expr::{
     create_physical_expr, LexOrdering, PhysicalSortRequirement,
 };
@@ -1227,10 +1225,10 @@ mod tests {
         assert_eq!(exec.output_partitioning().partition_count(), 1);
 
         // test metadata
-        let expected_num_rows = ProbabilityDistribution::new_uniform_exact(ScalarValue::UInt64(Some(8)))?;
-        let expected_total_byte_size = ProbabilityDistribution::new_uniform_exact(ScalarValue::UInt64(Some(671)))?;
-        assert_eq!(exec.statistics()?.num_rows.as_ref(), expected_num_rows.as_ref());
-        assert_eq!(exec.statistics()?.total_byte_size.as_ref(), expected_total_byte_size.as_ref());
+        let expected_num_rows = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(8)))?;
+        let expected_total_byte_size = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(671)))?;
+        assert_eq!(exec.statistics()?.num_rows.get_value(), expected_num_rows.get_value());
+        assert_eq!(exec.statistics()?.total_byte_size.get_value(), expected_total_byte_size.get_value());
 
         Ok(())
     }

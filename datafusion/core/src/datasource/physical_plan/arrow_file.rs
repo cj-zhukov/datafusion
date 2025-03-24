@@ -28,7 +28,7 @@ use arrow::buffer::Buffer;
 use arrow::datatypes::SchemaRef;
 use arrow_ipc::reader::FileDecoder;
 use datafusion_common::config::ConfigOptions;
-use datafusion_common::{Constraints, Statistics};
+use datafusion_common::Constraints;
 use datafusion_datasource::file::FileSource;
 use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_datasource::source::DataSourceExec;

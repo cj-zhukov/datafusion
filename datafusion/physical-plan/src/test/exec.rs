@@ -27,7 +27,6 @@ use std::{
 use crate::{
     common, execution_plan::Boundedness, DisplayAs, DisplayFormatType, ExecutionPlan,
     Partitioning, PlanProperties, RecordBatchStream, SendableRecordBatchStream,
-    Statistics,
 };
 use crate::{
     execution_plan::EmissionType,

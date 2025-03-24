@@ -27,7 +27,7 @@ use std::task::{Context, Poll};
 
 use crate::metrics::{self, ExecutionPlanMetricsSet, MetricBuilder};
 use crate::{
-    ColumnStatistics, ExecutionPlan, ExecutionPlanProperties, Partitioning, Statistics,
+    ExecutionPlan, ExecutionPlanProperties, Partitioning,
 };
 // compatibility
 pub use super::join_filter::JoinFilter;
@@ -43,13 +43,12 @@ use arrow::datatypes::{
 };
 use arrow_schema::DataType;
 use datafusion_common::cast::as_boolean_array;
-use datafusion_common::stats::Precision;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion_common::{
     plan_err, DataFusionError, JoinSide, JoinType, Result, ScalarValue, SharedResult
 };
 use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::add_offset_to_expr;
 use datafusion_physical_expr::expressions::Column;
@@ -724,7 +723,7 @@ impl<T> Clone for OnceFut<T> {
 #[derive(Clone, Debug)]
 struct PartialJoinStatistics {
     pub num_rows: ScalarValue,
-    pub column_statistics: Vec<ColumnStatisticsNew>,
+    pub column_statistics: Vec<ColumnStatistics>,
 }
 
 /// Estimate the statistics for the given join's output.
@@ -741,9 +740,9 @@ pub(crate) fn estimate_join_statistics(
     let join_stats = estimate_join_cardinality(join_type, left_stats, right_stats, &on);
     let (num_rows, column_statistics) = match join_stats {
         Some(stats) => (ProbabilityDistribution::new_uniform(Interval::try_new(stats.num_rows.clone(), stats.num_rows)?)?, stats.column_statistics),
-        None => (ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?, TableStatistics::unknown_column(schema)?)
+        None => (ProbabilityDistribution::new_unknown(&DataType::UInt64)?, TableStatistics::unknown_column(schema)?)
     };
-    let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+    let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
 
     Ok(TableStatistics {
         num_rows,
@@ -771,8 +770,8 @@ fn estimate_join_cardinality(
                     right_stats.column_statistics[right.index()].clone(),
                 ),
                 _ => (
-                    ColumnStatisticsNew::new_unknown().unwrap(),
-                    ColumnStatisticsNew::new_unknown().unwrap(),
+                    ColumnStatistics::new_unknown().unwrap_or_default(),
+                    ColumnStatistics::new_unknown().unwrap_or_default(),
                 ),
             }
         })
@@ -780,7 +779,7 @@ fn estimate_join_cardinality(
 
     match join_type {
         JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
-            let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64).unwrap();
+            let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
             let ij_cardinality = estimate_inner_join_cardinality(
                 TableStatistics {
                     num_rows: left_stats.num_rows.clone(),
@@ -810,7 +809,7 @@ fn estimate_join_cardinality(
             };
 
             Some(PartialJoinStatistics {
-                num_rows: cardinality.as_ref().clone(),
+                num_rows: cardinality.get_value().unwrap_or(&ScalarValue::Null).clone(),
                 // We don't do anything specific here, just combine the existing
                 // statistics which might yield subpar results (although it is
                 // true, esp regarding min/max). For a better estimation, we need
@@ -832,12 +831,12 @@ fn estimate_join_cardinality(
                 _ => (right_stats, left_stats),
             };
             let cardinality = match estimate_disjoint_inputs(&outer_stats, &inner_stats) {
-                Some(estimation) => estimation.as_ref().clone(),
-                None => outer_stats.num_rows.as_ref().clone(),
+                Some(estimation) => estimation.get_value().cloned(),
+                None => outer_stats.num_rows.get_value().cloned(),
             };
 
             Some(PartialJoinStatistics {
-                num_rows: cardinality,
+                num_rows: cardinality.unwrap_or(ScalarValue::Null),
                 column_statistics: outer_stats.column_statistics,
             })
         }
@@ -851,17 +850,16 @@ fn estimate_join_cardinality(
             };
 
             Some(PartialJoinStatistics {
-                num_rows: outer_stats.num_rows.as_ref().clone(),
+                num_rows: outer_stats.num_rows.get_value().unwrap_or(&ScalarValue::Null).clone(),
                 column_statistics: outer_stats.column_statistics,
             })
         }
 
         JoinType::LeftMark => {
-            let num_rows = left_stats.num_rows.as_ref().clone();
             let mut column_statistics = left_stats.column_statistics;
-            column_statistics.push(ColumnStatisticsNew::new_unknown().unwrap());
+            column_statistics.push(ColumnStatistics::new_unknown().unwrap_or_default());
             Some(PartialJoinStatistics {
-                num_rows,
+                num_rows: left_stats.num_rows.get_value().unwrap_or(&ScalarValue::Null).clone(),
                 column_statistics,
             })
         }
@@ -883,18 +881,17 @@ fn estimate_inner_join_cardinality(
 
     // The algorithm here is partly based on the non-histogram selectivity estimation
     // from Spark's Catalyst optimizer.
-    // let mut join_selectivity = Precision::Absent;
-    let mut join_selectivity = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64).unwrap();
+    let mut join_selectivity = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap();
     for (left_stat, right_stat) in left_stats
         .column_statistics
         .iter()
         .zip(right_stats.column_statistics.iter())
     {
         // Break if any of statistics bounds are undefined
-        if left_stat.min_value.as_ref().is_null() 
-            || left_stat.max_value.as_ref().is_null()
-            || right_stat.min_value.as_ref().is_null()
-            || right_stat.max_value.as_ref().is_null() 
+        if left_stat.min_value.get_value().is_none() 
+            || left_stat.max_value.get_value().is_none()
+            || right_stat.min_value.get_value().is_none()
+            || right_stat.max_value.get_value().is_none() 
         {
             return None;
         }
@@ -902,19 +899,24 @@ fn estimate_inner_join_cardinality(
         let left_max_distinct = max_distinct_count(&left_stats.num_rows, left_stat);
         let right_max_distinct = max_distinct_count(&right_stats.num_rows, right_stat);
         let max_distinct = left_max_distinct.max(&right_max_distinct);
-        if !max_distinct.as_ref().is_null() {
-            // Seems like there are a few implementations of this algorithm that implement
-            // exponential decay for the selectivity (like Hive's Optiq Optimizer). Needs
-            // further exploration.
-            join_selectivity = max_distinct;
+        // Seems like there are a few implementations of this algorithm that implement
+        // exponential decay for the selectivity (like Hive's Optiq Optimizer). Needs
+        // further exploration.
+        if let Some(max_distinct) = max_distinct.get_value() {
+            join_selectivity = ProbabilityDistribution::new_exact(max_distinct.clone()).unwrap_or_default();
         }
     }
 
     // With the assumption that the smaller input's domain is generally represented in the bigger
     // input's domain, we can estimate the inner join's cardinality by taking the cartesian product
     // of the two inputs and normalizing it by the selectivity factor.
-    let left_num_rows = left_stats.num_rows.as_ref();
-    let right_num_rows = right_stats.num_rows.as_ref();
+    let value = join_selectivity.get_value().unwrap_or(&ScalarValue::Null);
+    if value > &ScalarValue::new_one(&DataType::UInt64).unwrap() {
+        let res = new_generic_from_binary_op(&Operator::Multiply, &left_stats.num_rows, &right_stats.num_rows).unwrap();
+        Some(new_generic_from_binary_op(&Operator::Divide, &res, &join_selectivity).unwrap())
+    } else {
+        None
+    }
     // match join_selectivity {
     //     Precision::Exact(value) if value > 0 => {
     //         Some(Precision::Exact((left_num_rows * right_num_rows) / value))
@@ -928,7 +930,6 @@ fn estimate_inner_join_cardinality(
     //     // overestimation using just the cartesian product).
     //     _ => None,
     // }
-    todo!()
 }
 
 /// Estimates if inputs are non-overlapping, using input statistics.
@@ -945,21 +946,20 @@ fn estimate_disjoint_inputs(
         // If there is no overlap in any of the join columns, this means the join
         // itself is disjoint and the cardinality is 0. Though we can only assume
         // this when the statistics are exact (since it is a very strong assumption).
-        let left_min_val = left_stat.min_value.as_ref();
-        let right_max_val = right_stat.max_value.as_ref();
-        if left_min_val > right_max_val
-        {
+        let left_min_val = left_stat.min_value.get_value().unwrap_or(&ScalarValue::Null);
+        let right_max_val = right_stat.max_value.get_value().unwrap_or(&ScalarValue::Null);
+        if left_min_val > right_max_val {
             return Some(
-                ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(0)).unwrap()).unwrap()
+                ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default()
             );
         }
 
-        let left_max_val = left_stat.max_value.as_ref();
-        let right_min_val = right_stat.min_value.as_ref();
+        let left_max_val = left_stat.max_value.get_value().unwrap_or(&ScalarValue::Null);
+        let right_min_val = right_stat.min_value.get_value().unwrap_or(&ScalarValue::Null);
         if left_max_val < right_min_val
         {
             return Some(
-                ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(0)).unwrap()).unwrap()
+                ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default()
             );
         }
     }
@@ -973,7 +973,7 @@ fn estimate_disjoint_inputs(
 /// estimates the maximum distinct count from those.
 fn max_distinct_count(
     num_rows: &ProbabilityDistribution,
-    stats: &ColumnStatisticsNew,
+    stats: &ColumnStatistics,
 ) -> ProbabilityDistribution {
     // match &stats.distinct_count {
     //     &dc @ (Precision::Exact(_) | Precision::Inexact(_)) => dc,
@@ -1994,45 +1994,45 @@ mod tests {
         Ok(())
     }
 
-    fn create_stats(
-        num_rows: Option<usize>,
-        column_stats: Vec<ColumnStatistics>,
-        is_exact: bool,
-    ) -> Statistics {
-        Statistics {
-            num_rows: if is_exact {
-                num_rows.map(Exact)
-            } else {
-                num_rows.map(Inexact)
-            }
-            .unwrap_or(Absent),
-            column_statistics: column_stats,
-            total_byte_size: Absent,
-        }
-    }
+    // fn create_stats(
+    //     num_rows: Option<usize>,
+    //     column_stats: Vec<ColumnStatistics>,
+    //     is_exact: bool,
+    // ) -> Statistics {
+    //     Statistics {
+    //         num_rows: if is_exact {
+    //             num_rows.map(Exact)
+    //         } else {
+    //             num_rows.map(Inexact)
+    //         }
+    //         .unwrap_or(Absent),
+    //         column_statistics: column_stats,
+    //         total_byte_size: Absent,
+    //     }
+    // }
 
-    fn create_column_stats(
-        min: Precision<i64>,
-        max: Precision<i64>,
-        distinct_count: Precision<usize>,
-        null_count: Precision<usize>,
-    ) -> ColumnStatistics {
-        ColumnStatistics {
-            distinct_count,
-            min_value: min.map(ScalarValue::from),
-            max_value: max.map(ScalarValue::from),
-            sum_value: Absent,
-            null_count,
-        }
-    }
+    // fn create_column_stats(
+    //     min: Precision<i64>,
+    //     max: Precision<i64>,
+    //     distinct_count: Precision<usize>,
+    //     null_count: Precision<usize>,
+    // ) -> ColumnStatistics {
+    //     ColumnStatistics {
+    //         distinct_count,
+    //         min_value: min.map(ScalarValue::from),
+    //         max_value: max.map(ScalarValue::from),
+    //         sum_value: Absent,
+    //         null_count,
+    //     }
+    // }
 
-    type PartialStats = (
-        usize,
-        Precision<i64>,
-        Precision<i64>,
-        Precision<usize>,
-        Precision<usize>,
-    );
+    // type PartialStats = (
+    //     usize,
+    //     Precision<i64>,
+    //     Precision<i64>,
+    //     Precision<usize>,
+    //     Precision<usize>,
+    // );
 
     // This is mainly for validating the all edge cases of the estimation, but
     // more advanced (and real world test cases) are below where we need some control

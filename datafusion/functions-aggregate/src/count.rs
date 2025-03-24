@@ -16,7 +16,6 @@
 // under the License.
 
 use ahash::RandomState;
-use datafusion_common::stats::Precision;
 use datafusion_expr::expr::WindowFunction;
 use datafusion_functions_aggregate_common::aggregate::count_distinct::BytesViewDistinctCountAccumulator;
 use datafusion_macros::user_doc;
@@ -373,37 +372,34 @@ impl AggregateUDFImpl for Count {
             return None;
         }
 
-        let num_rows = statistics_args.statistics.num_rows.as_ref();
-        if !num_rows.is_null() {
+        statistics_args.statistics.num_rows.get_value().and_then(|num_rows| {
             if statistics_args.exprs.len() == 1 {
                 // TODO optimize with exprs other than Column
                 if let Some(col_expr) = statistics_args.exprs[0]
                     .as_any()
                     .downcast_ref::<expressions::Column>()
                 {
-                    let current_val = &statistics_args.statistics.column_statistics
+                    statistics_args.statistics.column_statistics
                         [col_expr.index()]
-                    .null_count;
-                    let cur_value = current_val.as_ref();
-                    if cur_value.is_null() {
-                        return None;
-                    } else {
-                        return num_rows.sub(cur_value.clone()).ok();
-                    }
-
+                        .null_count
+                        .get_value()
+                        .map(|current_val| num_rows.sub(current_val).ok())?
                 } else if let Some(lit_expr) = statistics_args.exprs[0]
                     .as_any()
-                    .downcast_ref::<expressions::Literal>()
+                    .downcast_ref::<expressions::Literal>() 
                 {
                     if lit_expr.value() == &COUNT_STAR_EXPANSION {
-                        return Some(num_rows.clone())
+                        Some(num_rows.clone())
                     } else {
-                        return None
+                        None
                     }
-                } 
+                } else {
+                    None
+                }
+            } else {
+                None
             }
-        }
-        None
+        })
     }
 
     fn documentation(&self) -> Option<&Documentation> {

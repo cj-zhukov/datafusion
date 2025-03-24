@@ -34,16 +34,14 @@ use datafusion_datasource::file_format::{
 };
 use datafusion_datasource::write::demux::DemuxedStreamReceiver;
 
-use arrow::compute::sum;
 use arrow::datatypes::{DataType, Field, FieldRef};
 use datafusion_catalog::Session;
 use datafusion_common::config::{ConfigField, ConfigFileType, TableParquetOptions};
 use datafusion_common::parsers::CompressionTypeVariant;
-use datafusion_common::stats::Precision;
 use datafusion_common::{
-    internal_datafusion_err, internal_err, not_impl_err, ColumnStatistics, DataFusionError, GetExt, Result, ScalarValue, DEFAULT_PARQUET_EXTENSION
+    internal_datafusion_err, internal_err, not_impl_err, DataFusionError, GetExt, Result, ScalarValue, DEFAULT_PARQUET_EXTENSION
 };
-use datafusion_common::{HashMap, Statistics};
+use datafusion_common::HashMap;
 use datafusion_common_runtime::SpawnedTask;
 use datafusion_datasource::display::FileGroupDisplay;
 use datafusion_datasource::file::FileSource;
@@ -51,7 +49,7 @@ use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryPool, MemoryReservation};
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
 use datafusion_expr::dml::InsertOp;
-use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Expr;
 use datafusion_functions_aggregate::min_max::{MaxAccumulator, MinAccumulator};
 use datafusion_physical_expr::PhysicalExpr;
@@ -712,8 +710,8 @@ pub fn statistics_from_parquet_meta_calc(
     }
     let n_rows = ScalarValue::UInt64(Some(num_rows as u64));
     let total_bytes = ScalarValue::UInt64(Some(total_byte_size as u64));
-    statistics.num_rows = ProbabilityDistribution::new_uniform_exact(n_rows)?;
-    statistics.total_byte_size = ProbabilityDistribution::new_uniform_exact(total_bytes)?;
+    statistics.num_rows = ProbabilityDistribution::new_exact(n_rows)?;
+    statistics.total_byte_size = ProbabilityDistribution::new_exact(total_bytes)?;
 
     let file_metadata = metadata.file_metadata();
     let mut file_schema = parquet_to_arrow_schema(
@@ -731,7 +729,7 @@ pub fn statistics_from_parquet_meta_calc(
     statistics.column_statistics = if has_statistics {
         let (mut max_accs, mut min_accs) = create_max_min_accs(&table_schema);
         let mut null_counts_array = 
-            vec![ProbabilityDistribution::new_uniform_zero(&DataType::UInt64)?; table_schema.fields().len()];
+            vec![ProbabilityDistribution::new_zero(&DataType::UInt64)?; table_schema.fields().len()];
 
         table_schema
             .fields()
@@ -759,7 +757,7 @@ pub fn statistics_from_parquet_meta_calc(
                         debug!("Failed to create statistics converter: {}", e);
                         // null_counts_array[idx] = Precision::Exact(num_rows);
                         let value = ScalarValue::UInt64(Some(num_rows as u64));
-                        null_counts_array[idx] = ProbabilityDistribution::new_uniform_exact(value).unwrap();
+                        null_counts_array[idx] = ProbabilityDistribution::new_exact(value).unwrap();
                     }
                 }
             });
@@ -782,7 +780,7 @@ fn get_col_stats(
     null_counts: Vec<ProbabilityDistribution>,
     max_values: &mut [Option<MaxAccumulator>],
     min_values: &mut [Option<MinAccumulator>],
-) -> Vec<ColumnStatisticsNew> {
+) -> Vec<ColumnStatistics> {
     (0..schema.fields().len())
         .map(|i| {
             let max_value = match max_values.get_mut(i).unwrap() {
@@ -794,16 +792,16 @@ fn get_col_stats(
                 None => None,
             };
             let max_value = match max_value {
-                None => ProbabilityDistribution::new_generic_unknown(&DataType::UInt64).unwrap(),
-                Some(value) => ProbabilityDistribution::new_uniform_exact(value).unwrap()
+                None => ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+                Some(value) => ProbabilityDistribution::new_exact(value).unwrap_or_default()
             };
             let min_value = match min_value {
-                None => ProbabilityDistribution::new_generic_unknown(&DataType::UInt64).unwrap(),
-                Some(value) => ProbabilityDistribution::new_uniform_exact(value).unwrap()
+                None => ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+                Some(value) => ProbabilityDistribution::new_exact(value).unwrap_or_default()
             };
-            let sum_value = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64).unwrap();
+            let sum_value = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
             let distinct_count = sum_value.clone();
-            ColumnStatisticsNew {
+            ColumnStatistics {
                 null_count: null_counts[i].clone(),
                 max_value,
                 min_value,

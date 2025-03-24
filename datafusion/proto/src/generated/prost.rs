@@ -1502,6 +1502,7 @@ pub struct FileScanExecConf {
     pub limit: ::core::option::Option<ScanLimit>,
     #[prost(message, optional, tag = "6")]
     pub statistics: ::core::option::Option<super::datafusion_common::Statistics>,
+    // pub statistics: ::core::option::Option<datafusion_expr::statistics::TableStatistics>,
     #[prost(string, repeated, tag = "7")]
     pub table_partition_cols: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, tag = "8")]

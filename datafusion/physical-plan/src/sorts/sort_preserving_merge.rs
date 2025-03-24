@@ -27,7 +27,7 @@ use crate::projection::{make_with_child, update_expr, ProjectionExec};
 use crate::sorts::streaming_merge::StreamingMergeBuilder;
 use crate::{
     DisplayAs, DisplayFormatType, Distribution, ExecutionPlan, ExecutionPlanProperties,
-    Partitioning, PlanProperties, SendableRecordBatchStream, Statistics,
+    Partitioning, PlanProperties, SendableRecordBatchStream,
 };
 
 use datafusion_common::{internal_err, Result};

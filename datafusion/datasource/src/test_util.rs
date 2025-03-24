@@ -22,7 +22,7 @@ use crate::{
 use std::sync::Arc;
 
 use arrow::datatypes::SchemaRef;
-use datafusion_common::{Result, Statistics};
+use datafusion_common::Result;
 use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_plan::metrics::ExecutionPlanMetricsSet;
 use object_store::ObjectStore;

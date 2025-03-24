@@ -94,7 +94,7 @@ impl ProbabilityDistribution {
 
     /// Constructs a new [`Generic`] distribution from the given type and infinity range. Other
     /// parameters (mean, median and variance) are initialized with null values.
-    pub fn new_generic_unknown(data_type: &DataType) -> Result<Self> {
+    pub fn new_unknown(data_type: &DataType) -> Result<Self> {
         Self::new_generic(
             ScalarValue::Null,
             ScalarValue::Null,
@@ -104,12 +104,12 @@ impl ProbabilityDistribution {
     }
 
     /// Constructs a new [`Uniform`] distribution from the given type and singleton zero range.
-    pub fn new_uniform_zero(data_type: &DataType) -> Result<Self> {
+    pub fn new_zero(data_type: &DataType) -> Result<Self> {
         Self::new_uniform(Interval::make_zero(data_type)?)
     }
 
     /// Constructs a new [`Uniform`] distribution from the given type and exact range.
-    pub fn new_uniform_exact(value: ScalarValue) -> Result<Self> {
+    pub fn new_exact(value: ScalarValue) -> Result<Self> {
         let interval = Interval::try_new(value.clone(), value.clone())?;
         Self::new_uniform(interval)
     }
@@ -228,19 +228,25 @@ impl ProbabilityDistribution {
     }
 }
 
-impl AsRef<ScalarValue> for ProbabilityDistribution {
-    fn as_ref(&self) -> &ScalarValue {
-        match &self {
-            Uniform(dist) => dist.get_value().unwrap_or(&ScalarValue::Null),
-            Bernoulli(dist) => dist.p_value(),
-            Exponential(_) => &ScalarValue::Null,
-            Gaussian(_) => &ScalarValue::Null,
-            Generic(_) => &ScalarValue::Null,
-        }
+impl Default for ProbabilityDistribution {
+    fn default() -> Self {
+        Self::new_unknown(&DataType::UInt64).expect("Failed creating default unknown `Generic` Distribution.")
     }
 }
 
 impl ProbabilityDistribution {
+    /// If a singltone value exists, it returns that value.
+    /// Otherwise, it returns `None`.
+    pub fn get_value(&self) -> Option<&ScalarValue> {
+        match &self {
+            Uniform(dist) => dist.get_value(),
+            Bernoulli(dist) => dist.get_value(),
+            Gaussian(dist) => dist.get_value(),
+            Generic(dist) => dist.get_value(),
+            Exponential(_) => None,
+        }
+    }
+
     pub fn to_inexact(self) -> Result<Self> {
         let res = match self {
             Uniform(dist) => Generic(GenericDistribution::try_new(ScalarValue::Null, ScalarValue::Null, ScalarValue::Null,dist.range().clone())?),
@@ -261,14 +267,24 @@ impl ProbabilityDistribution {
                 }
             },
             Bernoulli(dist) => {
-                match dist.p_value() {
-                    &ScalarValue::Null => Some(false),
-                    _ => Some(true),
+                match dist.get_value() {
+                    Some(_) => Some(true),
+                    None => Some(false)
                 }
             },
-            Exponential(dist) => todo!(),
-            Gaussian(dist) => todo!(),
-            Generic(dist) => todo!(),
+            Gaussian(dist) => {
+                match dist.get_value() {
+                    Some(_) => Some(true),
+                    None => Some(false)
+                }
+            },
+            Generic(dist) => {
+                match dist.get_value() {
+                    Some(_) => Some(true),
+                    None => Some(false)
+                }
+            },
+            Exponential(_) => None,
         }
     }
 
@@ -276,8 +292,20 @@ impl ProbabilityDistribution {
         unimplemented!()
     }
 
+    pub fn min(&self, other: &Self) -> ProbabilityDistribution {
+        if self.get_value() >= other.get_value() {
+            return other.clone();
+        } else {
+            return self.clone();
+        }
+    }
+
     pub fn max(&self, other: &Self) -> ProbabilityDistribution {
-        unimplemented!()
+        if self.get_value() >= other.get_value() {
+            return self.clone();
+        } else {
+            return other.clone();
+        }
     }
 }
 
@@ -337,6 +365,16 @@ pub struct GaussianDistribution {
     variance: ScalarValue,
 }
 
+impl GaussianDistribution {
+    pub fn get_value(&self) -> Option<&ScalarValue> {
+        if self.variance() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(ScalarValue::Null) &&
+            self.mean() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(ScalarValue::Null) {
+                return Some(self.variance());
+            }
+        None
+    }
+}
+
 /// Bernoulli distribution with success probability `p`. If `p` has a null value,
 /// the success probability is unknown. For a more in-depth discussion, see:
 ///
@@ -344,6 +382,15 @@ pub struct GaussianDistribution {
 #[derive(Clone, Debug, PartialEq)]
 pub struct BernoulliDistribution {
     p: ScalarValue,
+}
+
+impl BernoulliDistribution {
+    pub fn get_value(&self) -> Option<&ScalarValue> {
+        if self.p_value() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(ScalarValue::Null) || self.p_value() == &ScalarValue::new_one(&DataType::UInt64).unwrap_or(ScalarValue::Null) {
+            return Some(self.p_value());
+        }
+        None
+    }
 }
 
 /// A generic distribution whose functional form is not available, which is
@@ -356,6 +403,16 @@ pub struct GenericDistribution {
     median: ScalarValue,
     variance: ScalarValue,
     range: Interval,
+}
+
+impl GenericDistribution {
+    pub fn get_value(&self) -> Option<&ScalarValue> {
+        if self.variance() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(ScalarValue::Null) && 
+        (self.range().lower() == self.range().upper()) {
+            return Some(self.range().lower());
+        }
+        None
+    }
 }
 
 impl UniformDistribution {
@@ -955,7 +1012,7 @@ pub struct TableStatistics {
     /// Total bytes of the table rows.
     pub total_byte_size: ProbabilityDistribution,
     /// Statistics on a column level.
-    pub column_statistics: Vec<ColumnStatisticsNew>, 
+    pub column_statistics: Vec<ColumnStatistics>, 
 }
 
 impl Display for TableStatistics {
@@ -994,7 +1051,7 @@ impl TableStatistics {
             ScalarValue::Null,
             Interval::make_non_negative_infinity_interval(&DataType::UInt64)?,
         )?;
-        let column_statistics = vec![ColumnStatisticsNew::new_unknown()?];
+        let column_statistics = vec![ColumnStatistics::new_unknown()?];
         Ok(Self{ num_rows, total_byte_size, column_statistics })
     }
 
@@ -1005,7 +1062,7 @@ impl TableStatistics {
             .column_statistics
             .into_iter()
             .map(|s| s.to_inexact())
-            .collect::<Result<Vec<ColumnStatisticsNew>>>()?;
+            .collect::<Result<Vec<ColumnStatistics>>>()?;
         Ok(self)
     }
 
@@ -1023,18 +1080,18 @@ impl TableStatistics {
         unimplemented!()
     }
 
-    pub fn unknown_column(schema: &Schema) -> Result<Vec<ColumnStatisticsNew>> {
+    pub fn unknown_column(schema: &Schema) -> Result<Vec<ColumnStatistics>> {
         schema
             .fields()
             .iter()
-            .map(|_| ColumnStatisticsNew::new_unknown())
+            .map(|_| ColumnStatistics::new_unknown())
             .collect()
     }
 }
 
 /// Statistics for a column within a relation
 #[derive(Clone, Debug, PartialEq)]
-pub struct ColumnStatisticsNew {
+pub struct ColumnStatistics {
     /// Number of null values on column
     pub null_count: ProbabilityDistribution,
     /// Maximum value of column
@@ -1047,10 +1104,9 @@ pub struct ColumnStatisticsNew {
     pub distinct_count: ProbabilityDistribution,
 }
 
-impl Default for ColumnStatisticsNew {
+impl Default for ColumnStatistics {
     fn default() -> Self {
-        let interval = Interval::make_zero(&DataType::UInt64).unwrap();
-        let dist = ProbabilityDistribution::new_uniform(interval).unwrap();
+        let dist = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
         Self { 
             null_count: dist.clone(),
             max_value: dist.clone(), 
@@ -1061,13 +1117,13 @@ impl Default for ColumnStatisticsNew {
     }
 }
 
-impl ColumnStatisticsNew {
+impl ColumnStatistics {
     pub fn new_unknown() -> Result<Self> {
-        let null_count = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
-        let max_value = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
-        let min_value = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
-        let sum_value = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
-        let distinct_count = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+        let null_count = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        let max_value = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        let min_value = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        let sum_value = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        let distinct_count = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
         Ok(Self { null_count, max_value, min_value, sum_value, distinct_count })
     }
 
@@ -1082,9 +1138,9 @@ impl ColumnStatisticsNew {
 
     /// Column contains a single non null value (e.g constant).
     pub fn is_singleton(&self) -> bool {
-        let min = self.min_value.as_ref();
-        let max = self.max_value.as_ref();
-        if !min.is_null() && !max.is_null() && (min == max) {
+        let min= self.min_value.get_value();
+        let max = self.max_value.get_value();
+        if min.is_some() && max.is_some() && (min == max) {
             return true;
         }
         false
@@ -1858,36 +1914,38 @@ mod tests {
             ProbabilityDistribution::new_uniform(Interval::make_zero(&DataType::Int32)?)?,
             ProbabilityDistribution::new_uniform(Interval::make(Some(1), Some(1))?)?,
             ProbabilityDistribution::new_uniform(Interval::make(Some(42), Some(42))?)?,
+            ProbabilityDistribution::new_uniform(Interval::make(Some(1), Some(42))?)?,
         ];
-        let extected = vec![
-            &ScalarValue::Int32(Some(0)),
-            &ScalarValue::Int32(Some(1)),
-            &ScalarValue::Int32(Some(42)),
+        let expected = vec![
+            Some(&ScalarValue::Int32(Some(0))),
+            Some(&ScalarValue::Int32(Some(1))),
+            Some(&ScalarValue::Int32(Some(42))),
+            None,
         ];
-        let res = dists.iter().map(|dist| dist.as_ref()).collect::<Vec<_>>();
-        assert_eq!(res, extected);
+        let res = dists.iter().map(|dist| dist.get_value()).collect::<Vec<_>>();
+        assert_eq!(res, expected);
         Ok(())
     }
 
     #[test]
     fn test_new_generic_unkown() -> Result<()> {
         let data_type = &DataType::UInt64;
-        let dist = ProbabilityDistribution::new_generic_unknown(&data_type)?;
-        let extected = ProbabilityDistribution::new_generic(
+        let dist = ProbabilityDistribution::new_unknown(data_type)?;
+        let expected = ProbabilityDistribution::new_generic(
             ScalarValue::Null,
             ScalarValue::Null,
             ScalarValue::Null,
-            Interval::make_non_negative_infinity_interval(&data_type)?,
+            Interval::make_non_negative_infinity_interval(data_type)?,
         )?;
-        assert_eq!(dist, extected);
+        assert_eq!(dist, expected);
         Ok(())
     }
 
     #[test]
     fn test_new_uniform_zero() -> Result<()> {
         let data_type = &DataType::UInt64;
-        let dist = ProbabilityDistribution::new_uniform_zero(&data_type)?;
-        let expected = ProbabilityDistribution::new_uniform(Interval::make_zero(&data_type)?)?;
+        let dist = ProbabilityDistribution::new_zero(data_type)?;
+        let expected = ProbabilityDistribution::new_uniform(Interval::make_zero(data_type)?)?;
         assert_eq!(dist, expected);
         Ok(())
     }
@@ -1895,7 +1953,7 @@ mod tests {
     #[test]
     fn test_new_uniform_exact() -> Result<()> {
         let value = ScalarValue::UInt64(Some(42));
-        let dist = ProbabilityDistribution::new_uniform_exact(value.clone())?;
+        let dist = ProbabilityDistribution::new_exact(value.clone())?;
         let expected = ProbabilityDistribution::new_uniform(Interval::try_new(value.clone(), value)?)?;
         assert_eq!(dist, expected);
         Ok(())
@@ -1905,6 +1963,15 @@ mod tests {
     fn test_is_exact() -> Result<()> {
         let dist = ProbabilityDistribution::new_uniform(Interval::make(Some(42), Some(42))?)?;
         assert_eq!(dist.is_exact(), Some(true));
+        Ok(())
+    }
+
+    #[test]
+    fn test_new_uniform_unknown() -> Result<()> {
+        let data_type = &DataType::UInt64;
+        let dist = ProbabilityDistribution::new_unknown(data_type)?;
+        let expected = ProbabilityDistribution::new_uniform(Interval::make_non_negative_infinity_interval(data_type)?)?;
+        assert_eq!(dist, expected);
         Ok(())
     }
 }

@@ -26,7 +26,7 @@ use datafusion::{
     error::Result,
     logical_expr::Expr,
     physical_plan::{
-        ColumnStatistics, DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning,
+        DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning,
         PlanProperties, SendableRecordBatchStream, Statistics,
     },
     prelude::SessionContext,
@@ -34,7 +34,7 @@ use datafusion::{
 };
 use datafusion_catalog::Session;
 use datafusion_common::{project_schema, stats::Precision};
-use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_physical_expr::EquivalenceProperties;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
 
@@ -114,8 +114,8 @@ impl TableProvider for StatisticsValidation {
         let proj_col_stats = projection
             .iter()
             .map(|i| current_stat.column_statistics[*i].clone())
-            .collect::<Vec<ColumnStatisticsNew>>();
-        let total_byte_size = ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?;
+            .collect::<Vec<ColumnStatistics>>();
+        let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
         // Ok(Arc::new(Self::new(
         //     TableStatistics {
         //         num_rows: current_stat.num_rows,
@@ -197,25 +197,25 @@ fn init_ctx(stats: TableStatistics, schema: Schema) -> Result<SessionContext> {
     Ok(ctx)
 }
 
-fn fully_defined() -> (Statistics, Schema) {
+fn fully_defined() -> (TableStatistics, Schema) {
     (
-        Statistics {
-            num_rows: Precision::Exact(13),
-            total_byte_size: Precision::Absent, // ignore byte size for now
+        TableStatistics {
+            num_rows: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(13))).unwrap_or_default(),
+            total_byte_size: ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
             column_statistics: vec![
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(2),
-                    max_value: Precision::Exact(ScalarValue::Int32(Some(1023))),
-                    min_value: Precision::Exact(ScalarValue::Int32(Some(-24))),
-                    sum_value: Precision::Exact(ScalarValue::Int64(Some(10))),
-                    null_count: Precision::Exact(0),
+                ColumnStatistics { 
+                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(2))).unwrap_or_default(), 
+                    max_value: ProbabilityDistribution::new_exact(ScalarValue::Int32(Some(1023))).unwrap_or_default(), 
+                    min_value: ProbabilityDistribution::new_exact(ScalarValue::Int32(Some(-24))).unwrap_or_default(), 
+                    sum_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(Some(10))).unwrap_or_default(), 
+                    distinct_count: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(), 
                 },
-                ColumnStatistics {
-                    distinct_count: Precision::Exact(13),
-                    max_value: Precision::Exact(ScalarValue::Int64(Some(5486))),
-                    min_value: Precision::Exact(ScalarValue::Int64(Some(-6783))),
-                    sum_value: Precision::Exact(ScalarValue::Int64(Some(10))),
-                    null_count: Precision::Exact(5),
+                ColumnStatistics { 
+                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(13))).unwrap_or_default(), 
+                    max_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(Some(5486))).unwrap_or_default(), 
+                    min_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(Some(-6783))).unwrap_or_default(), 
+                    sum_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(Some(10))).unwrap_or_default(), 
+                    distinct_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(5))).unwrap_or_default(), 
                 },
             ],
         },

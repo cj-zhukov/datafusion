@@ -26,12 +26,11 @@ use crate::utils::collect_columns;
 use crate::PhysicalExpr;
 
 use arrow::datatypes::{DataType, Schema};
-use datafusion_common::stats::Precision;
 use datafusion_common::{
-    internal_datafusion_err, internal_err, ColumnStatistics, Result, ScalarValue,
+    internal_datafusion_err, internal_err, Result, ScalarValue,
 };
 use datafusion_expr::interval_arithmetic::{cardinality_ratio, Interval};
-use datafusion_expr::statistics::{ColumnStatisticsNew, ProbabilityDistribution};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution};
 
 /// The shared context used during the analysis of an expression. Includes
 /// the boundaries for all known columns.
@@ -62,7 +61,7 @@ impl AnalysisContext {
     /// Create a new analysis context from column statistics.
     pub fn try_from_statistics(
         input_schema: &Schema,
-        statistics: &[ColumnStatisticsNew],
+        statistics: &[ColumnStatistics],
     ) -> Result<Self> {
         statistics
             .iter()
@@ -96,7 +95,7 @@ impl ExprBoundaries {
     /// Create a new `ExprBoundaries` object from column level statistics.
     pub fn try_from_column(
         schema: &Schema,
-        col_stats: &ColumnStatisticsNew,
+        col_stats: &ColumnStatistics,
         col_index: usize,
     ) -> Result<Self> {
         let field = schema.fields().get(col_index).ok_or_else(|| {
@@ -108,16 +107,8 @@ impl ExprBoundaries {
         })?;
         let empty_field =
             ScalarValue::try_from(field.data_type()).unwrap_or(ScalarValue::Null);
-        let min_value = if col_stats.min_value.as_ref().is_null() {
-            empty_field.clone()
-        } else {
-            col_stats.min_value.as_ref().clone()
-        };
-        let max_value = if col_stats.max_value.as_ref().is_null() {
-            empty_field
-        } else {
-            col_stats.max_value.as_ref().clone()
-        };
+        let min_value = col_stats.min_value.get_value().unwrap_or(&empty_field).clone();
+        let max_value = col_stats.max_value.get_value().unwrap_or(&empty_field).clone();
         let interval = Interval::try_new(min_value, max_value)?;
         let column = Column::new(field.name(), col_index);
         Ok(ExprBoundaries {
@@ -138,7 +129,7 @@ impl ExprBoundaries {
                 Ok(Self {
                     column: Column::new(field.name(), i),
                     interval: Some(Interval::make_unbounded(field.data_type())?),
-                    distinct_count: ProbabilityDistribution::new_generic_unknown(&DataType::UInt64)?,
+                    distinct_count: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                 })
             })
             .collect()

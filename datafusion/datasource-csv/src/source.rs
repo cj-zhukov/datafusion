@@ -34,7 +34,7 @@ use datafusion_datasource::{
 use arrow::csv;
 use arrow::datatypes::SchemaRef;
 use datafusion_common::config::ConfigOptions;
-use datafusion_common::{Constraints, DataFusionError, Result, Statistics};
+use datafusion_common::{Constraints, DataFusionError, Result};
 use datafusion_datasource::file::FileSource;
 use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_datasource::source::DataSourceExec;

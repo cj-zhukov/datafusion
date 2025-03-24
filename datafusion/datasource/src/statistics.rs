@@ -87,8 +87,8 @@ impl MinMaxStatistics {
                 .iter()
                 .map(|(s, pv)| {
                     if i < s.column_statistics.len() {
-                        let min_value = s.column_statistics[i].min_value.as_ref().clone();
-                        let max_value = s.column_statistics[i].max_value.as_ref().clone();
+                        let min_value = s.column_statistics[i].min_value.get_value().unwrap_or(&ScalarValue::Null).clone();
+                        let max_value = s.column_statistics[i].max_value.get_value().unwrap_or(&ScalarValue::Null).clone();
                         Ok((min_value, max_value))
                     } else {
                         let partition_value = &pv[i - s.column_statistics.len()];

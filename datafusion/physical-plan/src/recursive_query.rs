@@ -25,7 +25,7 @@ use super::work_table::{ReservedBatches, WorkTable, WorkTableExec};
 use crate::execution_plan::{Boundedness, EmissionType};
 use crate::{
     metrics::{BaselineMetrics, ExecutionPlanMetricsSet, MetricsSet},
-    PlanProperties, RecordBatchStream, SendableRecordBatchStream, Statistics,
+    PlanProperties, RecordBatchStream, SendableRecordBatchStream,
 };
 use crate::{DisplayAs, DisplayFormatType, ExecutionPlan};
 

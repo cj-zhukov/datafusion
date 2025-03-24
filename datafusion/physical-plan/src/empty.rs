@@ -21,7 +21,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::memory::MemoryStream;
-use crate::{common, DisplayAs, PlanProperties, SendableRecordBatchStream, Statistics};
+use crate::{common, DisplayAs, PlanProperties, SendableRecordBatchStream};
 use crate::{
     execution_plan::{Boundedness, EmissionType},
     DisplayFormatType, ExecutionPlan, Partitioning,

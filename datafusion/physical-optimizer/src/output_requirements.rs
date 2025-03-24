@@ -28,7 +28,7 @@ use crate::PhysicalOptimizerRule;
 
 use datafusion_common::config::ConfigOptions;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
-use datafusion_common::{Result, Statistics};
+use datafusion_common::Result;
 use datafusion_execution::TaskContext;
 use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{Distribution, LexRequirement, PhysicalSortRequirement};

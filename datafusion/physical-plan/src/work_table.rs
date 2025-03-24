@@ -24,7 +24,7 @@ use crate::execution_plan::{Boundedness, EmissionType};
 use crate::memory::MemoryStream;
 use crate::{
     metrics::{ExecutionPlanMetricsSet, MetricsSet},
-    SendableRecordBatchStream, Statistics,
+    SendableRecordBatchStream,
 };
 use crate::{DisplayAs, DisplayFormatType, ExecutionPlan, PlanProperties};
 

@@ -52,14 +52,14 @@ async fn check_stats_precision_with_filter_pushdown() {
     let (_, _, state) = get_cache_runtime_state();
     // Scan without filter, stats are exact
     let exec = table.scan(&state, None, &[], None).await.unwrap();
-    let expected = ProbabilityDistribution::new_uniform_exact(ScalarValue::UInt64(Some(8))).unwrap();
+    let expected = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(8))).unwrap();
     assert_eq!(exec.statistics().unwrap().num_rows, expected);
 
     // Scan with filter pushdown, stats are inexact
     let filter = Expr::gt(col("id"), lit(1));
 
     let exec = table.scan(&state, None, &[filter], None).await.unwrap();
-    let expected = ProbabilityDistribution::new_uniform_exact(ScalarValue::UInt64(Some(8))).unwrap();
+    let expected = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(8))).unwrap();
     assert_eq!(exec.statistics().unwrap().num_rows, expected);
 }
 

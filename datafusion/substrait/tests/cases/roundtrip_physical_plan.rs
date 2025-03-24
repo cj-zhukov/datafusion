@@ -38,7 +38,7 @@ async fn parquet_exec() -> Result<()> {
         ObjectStoreUrl::local_filesystem(),
         Arc::new(Schema::empty()),
         source,
-    )
+    )?
     .with_file_groups(vec![
         vec![PartitionedFile::new(
             "file://foo/part-0.parquet".to_string(),

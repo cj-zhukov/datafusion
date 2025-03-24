@@ -70,19 +70,11 @@ pub(crate) fn should_swap_join_order(
     // First compare `total_byte_size` of left and right side,
     // if information in this field is insufficient fallback to the `num_rows`
     match (
-        left_stats.total_byte_size.as_ref(),
-        right_stats.total_byte_size.as_ref(),
+        left_stats.total_byte_size.get_value(),
+        right_stats.total_byte_size.get_value(),
     ) {
-        (&ScalarValue::Null, &ScalarValue::Null) => match (
-            left_stats.num_rows.as_ref(),
-            right_stats.num_rows.as_ref(),
-        ) {
-            (&ScalarValue::Null, &ScalarValue::Null) => Ok(false),
-            _ => Ok(true)
-        },
-        _ => {
-            Ok(left_stats.total_byte_size.as_ref() > right_stats.total_byte_size.as_ref())
-        }
+        (Some(left), Some(right)) => Ok(left > right),
+        _ => Ok(false)
     }
 }
 
@@ -97,9 +89,9 @@ fn supports_collect_by_thresholds(
         return false;
     };
 
-    let byte_size = stats.total_byte_size.as_ref();
+    let byte_size = stats.total_byte_size.get_value().unwrap_or(&ScalarValue::Null);
     let threshold_byte_size= ScalarValue::try_from(threshold_byte_size as u64).unwrap_or(ScalarValue::Null);
-    let num_rows = stats.num_rows.as_ref();
+    let num_rows = stats.num_rows.get_value().unwrap_or(&ScalarValue::Null);
     let threshold_num_rows = ScalarValue::try_from(threshold_num_rows as u64).unwrap_or(ScalarValue::Null);
     if byte_size.is_null() {
         *byte_size < threshold_byte_size

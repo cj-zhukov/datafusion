@@ -50,7 +50,7 @@ use crate::spill::spill_record_batches;
 use crate::{
     metrics, DisplayAs, DisplayFormatType, Distribution, ExecutionPlan,
     ExecutionPlanProperties, PhysicalExpr, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream, Statistics,
+    SendableRecordBatchStream,
 };
 
 use arrow::array::{types::UInt64Type, *};
