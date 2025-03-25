@@ -365,9 +365,9 @@ mod tests {
             unimplemented!()
         }
 
-        fn statistics(&self) -> Result<datafusion::common::Statistics> {
-            unimplemented!()
-        }
+        // fn statistics(&self) -> Result<datafusion::common::Statistics> {
+        //     unimplemented!()
+        // }
     }
 
     #[test]

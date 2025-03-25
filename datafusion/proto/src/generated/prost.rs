@@ -1501,8 +1501,8 @@ pub struct FileScanExecConf {
     #[prost(message, optional, tag = "5")]
     pub limit: ::core::option::Option<ScanLimit>,
     #[prost(message, optional, tag = "6")]
-    pub statistics: ::core::option::Option<super::datafusion_common::Statistics>,
-    // pub statistics: ::core::option::Option<datafusion_expr::statistics::TableStatistics>,
+    // pub statistics: ::core::option::Option<super::datafusion_common::Statistics>,
+    pub statistics: ::core::option::Option<super::datafusion_common::TableStatistics>,
     #[prost(string, repeated, tag = "7")]
     pub table_partition_cols: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, tag = "8")]
@@ -1879,7 +1879,8 @@ pub struct PartitionedFile {
     #[prost(message, optional, tag = "5")]
     pub range: ::core::option::Option<FileRange>,
     #[prost(message, optional, tag = "6")]
-    pub statistics: ::core::option::Option<super::datafusion_common::Statistics>,
+    // pub statistics: ::core::option::Option<super::datafusion_common::Statistics>,
+    pub statistics: ::core::option::Option<super::datafusion_common::TableStatistics>,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct FileRange {

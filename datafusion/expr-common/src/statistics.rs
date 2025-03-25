@@ -25,7 +25,7 @@ use crate::type_coercion::binary::binary_numeric_coercion;
 use arrow::array::ArrowNativeTypeOp;
 use arrow::datatypes::{DataType, Schema, SchemaRef};
 use datafusion_common::rounding::alter_fp_rounding_mode;
-use datafusion_common::{internal_err, not_impl_err, Result, ScalarValue};
+use datafusion_common::{internal_err, not_impl_err, DataFusionError, Result, ScalarValue};
 
 /// This object defines probabilistic distributions that encode uncertain
 /// information about a single, scalar value. Currently, we support five core

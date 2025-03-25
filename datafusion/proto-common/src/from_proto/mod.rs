@@ -43,6 +43,7 @@ use datafusion_common::{
     Column, ColumnStatistics, Constraint, Constraints, DFSchema, DFSchemaRef,
     DataFusionError, JoinSide, ScalarValue, Statistics, TableReference,
 };
+use datafusion_expr::statistics::TableStatistics;
 
 #[derive(Debug)]
 pub enum Error {
@@ -821,6 +822,36 @@ impl TryFrom<&protobuf::Statistics> for Statistics {
         })
     }
 }
+
+impl TryFrom<&protobuf::TableStatistics> for TableStatistics {
+    type Error = DataFusionError;
+
+    fn try_from(
+        s: &protobuf::TableStatistics,
+    ) -> datafusion_common::Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
+// impl TryFrom<&TableStatistics> for protobuf::TableStatistics {
+//     type Error = DataFusionError;
+
+//     fn try_from(value: &TableStatistics) -> Result<Self, Self::Error> {
+//         todo!()
+//     }
+// }
+
+impl From<&TableStatistics> for protobuf::TableStatistics {
+    fn from(value: &TableStatistics) -> Self {
+        todo!()
+    }
+}
+
+// impl From<&protobuf::TableStatistics> for TableStatistics {
+//     fn from(value: &protobuf::TableStatistics) -> Self {
+//         todo!()
+//     }
+// }
 
 impl From<protobuf::CompressionTypeVariant> for CompressionTypeVariant {
     fn from(value: protobuf::CompressionTypeVariant) -> Self {

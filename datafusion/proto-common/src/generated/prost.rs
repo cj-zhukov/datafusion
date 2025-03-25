@@ -887,6 +887,35 @@ pub struct ColumnStats {
     #[prost(message, optional, tag = "4")]
     pub distinct_count: ::core::option::Option<Precision>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProbabilityDistribution {
+    #[prost(enumeration = "PrecisionInfo", tag = "1")]
+    pub precision_info: i32,
+    #[prost(message, optional, tag = "2")]
+    pub val: ::core::option::Option<ScalarValue>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TableStatistics {
+    #[prost(message, optional, tag = "1")]
+    pub num_rows: ::core::option::Option<ProbabilityDistribution>,
+    #[prost(message, optional, tag = "2")]
+    pub total_byte_size: ::core::option::Option<ProbabilityDistribution>,
+    #[prost(message, repeated, tag = "3")]
+    pub column_stats: ::prost::alloc::vec::Vec<ColumnStatistics>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ColumnStatistics {
+    #[prost(message, optional, tag = "1")]
+    pub min_value: ::core::option::Option<ProbabilityDistribution>,
+    #[prost(message, optional, tag = "2")]
+    pub max_value: ::core::option::Option<ProbabilityDistribution>,
+    #[prost(message, optional, tag = "5")]
+    pub sum_value: ::core::option::Option<ProbabilityDistribution>,
+    #[prost(message, optional, tag = "3")]
+    pub null_count: ::core::option::Option<ProbabilityDistribution>,
+    #[prost(message, optional, tag = "4")]
+    pub distinct_count: ::core::option::Option<ProbabilityDistribution>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum JoinType {

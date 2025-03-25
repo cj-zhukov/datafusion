@@ -67,74 +67,74 @@ impl TSVFileFormat {
     }
 }
 
-#[async_trait::async_trait]
-impl FileFormat for TSVFileFormat {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+// #[async_trait::async_trait]
+// impl FileFormat for TSVFileFormat {
+//     fn as_any(&self) -> &dyn Any {
+//         self
+//     }
 
-    fn get_ext(&self) -> String {
-        "tsv".to_string()
-    }
+//     fn get_ext(&self) -> String {
+//         "tsv".to_string()
+//     }
 
-    fn get_ext_with_compression(&self, c: &FileCompressionType) -> Result<String> {
-        if c == &FileCompressionType::UNCOMPRESSED {
-            Ok("tsv".to_string())
-        } else {
-            todo!("Compression not supported")
-        }
-    }
+//     fn get_ext_with_compression(&self, c: &FileCompressionType) -> Result<String> {
+//         if c == &FileCompressionType::UNCOMPRESSED {
+//             Ok("tsv".to_string())
+//         } else {
+//             todo!("Compression not supported")
+//         }
+//     }
 
-    async fn infer_schema(
-        &self,
-        state: &dyn Session,
-        store: &Arc<dyn ObjectStore>,
-        objects: &[ObjectMeta],
-    ) -> Result<SchemaRef> {
-        self.csv_file_format
-            .infer_schema(state, store, objects)
-            .await
-    }
+//     async fn infer_schema(
+//         &self,
+//         state: &dyn Session,
+//         store: &Arc<dyn ObjectStore>,
+//         objects: &[ObjectMeta],
+//     ) -> Result<SchemaRef> {
+//         self.csv_file_format
+//             .infer_schema(state, store, objects)
+//             .await
+//     }
 
-    async fn infer_stats(
-        &self,
-        state: &dyn Session,
-        store: &Arc<dyn ObjectStore>,
-        table_schema: SchemaRef,
-        object: &ObjectMeta,
-    ) -> Result<Statistics> {
-        self.csv_file_format
-            .infer_stats(state, store, table_schema, object)
-            .await
-    }
+//     async fn infer_stats(
+//         &self,
+//         state: &dyn Session,
+//         store: &Arc<dyn ObjectStore>,
+//         table_schema: SchemaRef,
+//         object: &ObjectMeta,
+//     ) -> Result<Statistics> {
+//         self.csv_file_format
+//             .infer_stats(state, store, table_schema, object)
+//             .await
+//     }
 
-    async fn create_physical_plan(
-        &self,
-        state: &dyn Session,
-        conf: FileScanConfig,
-        filters: Option<&Arc<dyn PhysicalExpr>>,
-    ) -> Result<Arc<dyn ExecutionPlan>> {
-        self.csv_file_format
-            .create_physical_plan(state, conf, filters)
-            .await
-    }
+//     async fn create_physical_plan(
+//         &self,
+//         state: &dyn Session,
+//         conf: FileScanConfig,
+//         filters: Option<&Arc<dyn PhysicalExpr>>,
+//     ) -> Result<Arc<dyn ExecutionPlan>> {
+//         self.csv_file_format
+//             .create_physical_plan(state, conf, filters)
+//             .await
+//     }
 
-    async fn create_writer_physical_plan(
-        &self,
-        input: Arc<dyn ExecutionPlan>,
-        state: &dyn Session,
-        conf: FileSinkConfig,
-        order_requirements: Option<LexRequirement>,
-    ) -> Result<Arc<dyn ExecutionPlan>> {
-        self.csv_file_format
-            .create_writer_physical_plan(input, state, conf, order_requirements)
-            .await
-    }
+//     async fn create_writer_physical_plan(
+//         &self,
+//         input: Arc<dyn ExecutionPlan>,
+//         state: &dyn Session,
+//         conf: FileSinkConfig,
+//         order_requirements: Option<LexRequirement>,
+//     ) -> Result<Arc<dyn ExecutionPlan>> {
+//         self.csv_file_format
+//             .create_writer_physical_plan(input, state, conf, order_requirements)
+//             .await
+//     }
 
-    fn file_source(&self) -> Arc<dyn FileSource> {
-        self.csv_file_format.file_source()
-    }
-}
+//     fn file_source(&self) -> Arc<dyn FileSource> {
+//         self.csv_file_format.file_source()
+//     }
+// }
 
 #[derive(Default, Debug)]
 /// Factory for creating TSV file formats
@@ -153,29 +153,29 @@ impl TSVFileFactory {
     }
 }
 
-impl FileFormatFactory for TSVFileFactory {
-    fn create(
-        &self,
-        state: &dyn Session,
-        format_options: &std::collections::HashMap<String, String>,
-    ) -> Result<Arc<dyn FileFormat>> {
-        let mut new_options = format_options.clone();
-        new_options.insert("format.delimiter".to_string(), "\t".to_string());
+// impl FileFormatFactory for TSVFileFactory {
+//     fn create(
+//         &self,
+//         state: &dyn Session,
+//         format_options: &std::collections::HashMap<String, String>,
+//     ) -> Result<Arc<dyn FileFormat>> {
+//         let mut new_options = format_options.clone();
+//         new_options.insert("format.delimiter".to_string(), "\t".to_string());
 
-        let csv_file_format = self.csv_file_factory.create(state, &new_options)?;
-        let tsv_file_format = Arc::new(TSVFileFormat::new(csv_file_format));
+//         let csv_file_format = self.csv_file_factory.create(state, &new_options)?;
+//         let tsv_file_format = Arc::new(TSVFileFormat::new(csv_file_format));
 
-        Ok(tsv_file_format)
-    }
+//         Ok(tsv_file_format)
+//     }
 
-    fn default(&self) -> Arc<dyn FileFormat> {
-        todo!()
-    }
+//     fn default(&self) -> Arc<dyn FileFormat> {
+//         todo!()
+//     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+//     fn as_any(&self) -> &dyn Any {
+//         self
+//     }
+// }
 
 impl GetExt for TSVFileFactory {
     fn get_ext(&self) -> String {
@@ -185,38 +185,38 @@ impl GetExt for TSVFileFactory {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Create a new context with the default configuration
-    let mut state = SessionStateBuilder::new().with_default_features().build();
+    // // Create a new context with the default configuration
+    // let mut state = SessionStateBuilder::new().with_default_features().build();
 
-    // Register the custom file format
-    let file_format = Arc::new(TSVFileFactory::new());
-    state.register_file_format(file_format, true).unwrap();
+    // // Register the custom file format
+    // let file_format = Arc::new(TSVFileFactory::new());
+    // state.register_file_format(file_format, true).unwrap();
 
-    // Create a new context with the custom file format
-    let ctx = SessionContext::new_with_state(state);
+    // // Create a new context with the custom file format
+    // let ctx = SessionContext::new_with_state(state);
 
-    let mem_table = create_mem_table();
-    ctx.register_table("mem_table", mem_table).unwrap();
+    // let mem_table = create_mem_table();
+    // ctx.register_table("mem_table", mem_table).unwrap();
 
-    let temp_dir = tempdir().unwrap();
-    let table_save_path = temp_dir.path().join("mem_table.tsv");
+    // let temp_dir = tempdir().unwrap();
+    // let table_save_path = temp_dir.path().join("mem_table.tsv");
 
-    let d = ctx
-        .sql(&format!(
-            "COPY mem_table TO '{}' STORED AS TSV;",
-            table_save_path.display(),
-        ))
-        .await?;
+    // let d = ctx
+    //     .sql(&format!(
+    //         "COPY mem_table TO '{}' STORED AS TSV;",
+    //         table_save_path.display(),
+    //     ))
+    //     .await?;
 
-    let results = d.collect().await?;
-    println!(
-        "Number of inserted rows: {:?}",
-        (results[0]
-            .column_by_name("count")
-            .unwrap()
-            .as_primitive::<UInt64Type>()
-            .value(0))
-    );
+    // let results = d.collect().await?;
+    // println!(
+    //     "Number of inserted rows: {:?}",
+    //     (results[0]
+    //         .column_by_name("count")
+    //         .unwrap()
+    //         .as_primitive::<UInt64Type>()
+    //         .value(0))
+    // );
 
     Ok(())
 }
