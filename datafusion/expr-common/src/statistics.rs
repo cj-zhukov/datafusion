@@ -25,7 +25,7 @@ use crate::type_coercion::binary::binary_numeric_coercion;
 use arrow::array::ArrowNativeTypeOp;
 use arrow::datatypes::{DataType, Schema, SchemaRef};
 use datafusion_common::rounding::alter_fp_rounding_mode;
-use datafusion_common::{internal_err, not_impl_err, DataFusionError, Result, ScalarValue};
+use datafusion_common::{internal_err, not_impl_err, Result, ScalarValue};
 
 /// This object defines probabilistic distributions that encode uncertain
 /// information about a single, scalar value. Currently, we support five core
@@ -250,9 +250,9 @@ impl ProbabilityDistribution {
     pub fn to_inexact(self) -> Result<Self> {
         let res = match self {
             Uniform(dist) => Generic(GenericDistribution::try_new(ScalarValue::Null, ScalarValue::Null, ScalarValue::Null,dist.range().clone())?),
-            Exponential(dist) => todo!(),
-            Gaussian(dist) => todo!(),
-            Bernoulli(dist) => todo!(),
+            Exponential(_dist) => todo!(),
+            Gaussian(_dist) => todo!(),
+            Bernoulli(_dist) => todo!(),
             _ => self,
         };
         Ok(res)
@@ -289,7 +289,10 @@ impl ProbabilityDistribution {
     }
 
     pub fn with_estimated_selectivity(self, selectivity: f64) -> Self {
-        unimplemented!()
+        let value = self.get_value().unwrap_or(&ScalarValue::Null);
+        let selectivity = ScalarValue::Float64(Some(selectivity));
+        let res = value.mul(selectivity).unwrap_or(ScalarValue::Null);
+        ProbabilityDistribution::new_exact(res).unwrap_or_default()
     }
 
     pub fn min(&self, other: &Self) -> ProbabilityDistribution {
@@ -1001,7 +1004,13 @@ pub fn compute_variance(
 
 impl Display for ProbabilityDistribution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+        match self {
+            Uniform(dist) => write!(f, "Uniform({:?})", dist),
+            Exponential(dist) => write!(f, "Exponential({:?})", dist),
+            Gaussian(dist) => write!(f, "Gaussian({:?})", dist),
+            Bernoulli(dist) => write!(f, "Bernoulli({:?})", dist),
+            Generic(dist) => write!(f, "Generic({:?})", dist),
+        }
     }
 }
 
@@ -1023,6 +1032,11 @@ impl Display for TableStatistics {
             .enumerate()
             .map(|(i, cs)| {
                 let s = format!("(Col[{}]:", i);
+                let s = format!("{} Min={}", s, cs.min_value);
+                let s = format!("{} Max={}", s, cs.max_value);
+                let s = format!("{} Sum={}", s, cs.sum_value);
+                let s = format!("{} Null={}", s, cs.null_count);
+                let s = format!("{} Distinct={}", s, cs.distinct_count);
                 s + ")"
             })
             .collect::<Vec<_>>()
@@ -1039,20 +1053,9 @@ impl Display for TableStatistics {
 
 impl TableStatistics {
     pub fn new_unknown(schema: &Schema) -> Result<Self> {
-        let num_rows = ProbabilityDistribution::new_generic(
-            ScalarValue::Null,
-            ScalarValue::Null,
-            ScalarValue::Null,
-            Interval::make_non_negative_infinity_interval(&DataType::UInt64)?,
-        )?;
-        let total_byte_size = ProbabilityDistribution::new_generic(
-            ScalarValue::Null,
-            ScalarValue::Null,
-            ScalarValue::Null,
-            Interval::make_non_negative_infinity_interval(&DataType::UInt64)?,
-        )?;
-        let column_statistics = vec![ColumnStatistics::new_unknown()?];
-        Ok(Self{ num_rows, total_byte_size, column_statistics })
+        let unknown = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        let column_statistics = ColumnStatistics::unknown_column(schema)?;
+        Ok(Self{ num_rows: unknown.clone(), total_byte_size: unknown.clone(), column_statistics })
     }
 
     pub fn to_inexact(mut self) -> Result<Self> {
@@ -1066,10 +1069,51 @@ impl TableStatistics {
         Ok(self)
     }
 
+    /// Project the statistics to the given column indices.
+    ///
+    /// For example, if we had statistics for columns `{"a", "b", "c"}`,
+    /// projecting to `vec![2, 1]` would return statistics for columns `{"c",
+    /// "b"}`.
     pub fn project(mut self, projection: Option<&Vec<usize>>) -> Self {
-        unimplemented!()
+        let Some(projection) = projection else {
+            return self;
+        };
+
+        enum Slot {
+            /// The column is taken and put into the specified statistics location
+            Taken(usize),
+            /// The original columns is present
+            Present(ColumnStatistics),
+        }
+
+        // Convert to Vec<Slot> so we can avoid copying the statistics
+        let mut columns: Vec<_> = std::mem::take(&mut self.column_statistics)
+            .into_iter()
+            .map(Slot::Present)
+            .collect();
+
+        for idx in projection {
+            let next_idx = self.column_statistics.len();
+            let slot = std::mem::replace(
+                columns.get_mut(*idx).expect("projection out of bounds"),
+                Slot::Taken(next_idx),
+            );
+            match slot {
+                // The column was there, so just move it
+                Slot::Present(col) => self.column_statistics.push(col),
+                // The column was taken, so copy from the previous location
+                Slot::Taken(prev_idx) => self
+                    .column_statistics
+                    .push(self.column_statistics[prev_idx].clone()),
+            }
+        }
+
+        self
     }
 
+    /// Calculates the statistics after `fetch` and `skip` operations apply.
+    /// Here, `self` denotes per-partition statistics. Use the `n_partitions`
+    /// parameter to compute global statistics in a multi-partition setting.
     pub fn with_fetch(
         mut self,
         schema: SchemaRef,
@@ -1077,7 +1121,27 @@ impl TableStatistics {
         skip: usize,
         n_partitions: usize,
     ) -> Result<Self> {
-        unimplemented!()
+        let fetch_val = fetch.map(|v| v as u64);
+        let fetch_val = ScalarValue::UInt64(fetch_val);
+        let skip = ScalarValue::UInt64(Some(skip as u64));
+        let fetch = fetch.map(|v| v as u64);
+        let fetch = ScalarValue::UInt64(fetch);
+        let num_rows = self.num_rows.get_value().unwrap_or(&ScalarValue::Null).clone();
+
+        self.num_rows = if num_rows <= fetch && skip == ScalarValue::new_one(&DataType::UInt64)? {
+            self.num_rows
+        } else if num_rows.sub(&skip)? <= fetch_val {
+            let n_partitions = ScalarValue::UInt64(Some(n_partitions as u64));
+            let value = num_rows.sub(&skip)?.mul_checked(n_partitions)?;
+            check_num_rows(Some(value), self.num_rows.is_exact().unwrap())?
+        } else {
+            let n_partitions = ScalarValue::UInt64(Some(n_partitions as u64));
+            let value = fetch_val.mul_checked(n_partitions)?;
+            check_num_rows(Some(value), self.num_rows.is_exact().unwrap())?
+        };
+        self.column_statistics = TableStatistics::unknown_column(&schema)?;
+        self.total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        Ok(self)
     }
 
     pub fn unknown_column(schema: &Schema) -> Result<Vec<ColumnStatistics>> {
@@ -1086,6 +1150,18 @@ impl TableStatistics {
             .iter()
             .map(|_| ColumnStatistics::new_unknown())
             .collect()
+    }
+}
+
+fn check_num_rows(value: Option<ScalarValue>, is_exact: bool) -> Result<ProbabilityDistribution> {
+    if let Some(value) = value {
+        if is_exact {
+            ProbabilityDistribution::new_exact(value)
+        } else {
+            ProbabilityDistribution::new_unknown(&DataType::UInt64)
+        }
+    } else {
+        ProbabilityDistribution::new_unknown(&DataType::UInt64)
     }
 }
 
@@ -1106,25 +1182,38 @@ pub struct ColumnStatistics {
 
 impl Default for ColumnStatistics {
     fn default() -> Self {
-        let dist = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
+        let unknown = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
         Self { 
-            null_count: dist.clone(),
-            max_value: dist.clone(), 
-            min_value: dist.clone(), 
-            sum_value: dist.clone(),
-            distinct_count: dist.clone(),
+            null_count: unknown.clone(),
+            max_value: unknown.clone(), 
+            min_value: unknown.clone(), 
+            sum_value: unknown.clone(),
+            distinct_count: unknown.clone(),
         }
     }
 }
 
 impl ColumnStatistics {
+    /// Returns an unbounded `ColumnStatistics` for each field in the schema.
+    pub fn unknown_column(schema: &Schema) -> Result<Vec<ColumnStatistics>> {
+        schema
+            .fields()
+            .iter()
+            .map(|_| ColumnStatistics::new_unknown())
+            .collect()
+    }
+
+    /// Returns a [`ColumnStatistics`] instance for the given schema by assigning
+    /// unknown statistics to each column in the schema.
     pub fn new_unknown() -> Result<Self> {
-        let null_count = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
-        let max_value = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
-        let min_value = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
-        let sum_value = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
-        let distinct_count = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
-        Ok(Self { null_count, max_value, min_value, sum_value, distinct_count })
+        let unknown = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        Ok(Self { 
+            null_count: unknown.clone(), 
+            max_value: unknown.clone(), 
+            min_value: unknown.clone(),  
+            sum_value: unknown.clone(), 
+            distinct_count: unknown.clone(),  
+        })
     }
 
     pub fn to_inexact(mut self) -> Result<Self> {

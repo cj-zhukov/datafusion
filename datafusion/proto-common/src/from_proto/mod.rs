@@ -833,25 +833,11 @@ impl TryFrom<&protobuf::TableStatistics> for TableStatistics {
     }
 }
 
-// impl TryFrom<&TableStatistics> for protobuf::TableStatistics {
-//     type Error = DataFusionError;
-
-//     fn try_from(value: &TableStatistics) -> Result<Self, Self::Error> {
-//         todo!()
-//     }
-// }
-
 impl From<&TableStatistics> for protobuf::TableStatistics {
     fn from(value: &TableStatistics) -> Self {
         todo!()
     }
 }
-
-// impl From<&protobuf::TableStatistics> for TableStatistics {
-//     fn from(value: &protobuf::TableStatistics) -> Self {
-//         todo!()
-//     }
-// }
 
 impl From<protobuf::CompressionTypeVariant> for CompressionTypeVariant {
     fn from(value: protobuf::CompressionTypeVariant) -> Self {
