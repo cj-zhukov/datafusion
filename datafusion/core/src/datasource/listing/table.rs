@@ -35,6 +35,7 @@ use crate::execution::context::SessionState;
 use datafusion_catalog::TableProvider;
 use datafusion_common::{config_err, DataFusionError, Result};
 use datafusion_datasource::file_scan_config::FileScanConfig;
+use datafusion_execution::cache::cache_unit::DefaultFileStatisticsCache;
 use datafusion_expr::dml::InsertOp;
 use datafusion_expr::statistics::TableStatistics;
 use datafusion_expr::{utils::conjunction, Expr, TableProviderFilterPushDown};
@@ -762,8 +763,7 @@ impl ListingTable {
             table_schema,
             options,
             definition: None,
-            // collected_statistics: Arc::new(DefaultFileStatisticsCache::default()),
-            collected_statistics: todo!(),
+            collected_statistics: Arc::new(DefaultFileStatisticsCache::default()),
             constraints: Constraints::empty(),
             column_defaults: HashMap::new(),
         };
@@ -793,10 +793,9 @@ impl ListingTable {
     ///
     /// If `None`, creates a new [`DefaultFileStatisticsCache`] scoped to this query.
     pub fn with_cache(mut self, cache: Option<FileStatisticsCache>) -> Self {
-        // self.collected_statistics =
-        //     cache.unwrap_or(Arc::new(DefaultFileStatisticsCache::default()));
-        // self
-        todo!()
+        self.collected_statistics =
+            cache.unwrap_or(Arc::new(DefaultFileStatisticsCache::default()));
+        self
     }
 
     /// Specify the SQL definition for this table, if any
@@ -949,7 +948,7 @@ impl TableProvider for ListingTable {
                 )?
                 .with_file_groups(partitioned_file_lists)
                 .with_constraints(self.constraints.clone())
-                // .with_statistics(statistics)
+                .with_statistics(statistics)
                 .with_projection(projection.cloned())
                 .with_limit(limit)
                 .with_output_ordering(output_ordering)
@@ -1152,32 +1151,31 @@ impl ListingTable {
         store: &Arc<dyn ObjectStore>,
         part_file: &PartitionedFile,
     ) -> Result<Arc<TableStatistics>> {
-        // match self
-        //     .collected_statistics
-        //     .get_with_extra(&part_file.object_meta.location, &part_file.object_meta)
-        // {
-        //     Some(statistics) => Ok(statistics),
-        //     None => {
-        //         let statistics = self
-        //             .options
-        //             .format
-        //             .infer_stats(
-        //                 ctx,
-        //                 store,
-        //                 Arc::clone(&self.file_schema),
-        //                 &part_file.object_meta,
-        //             )
-        //             .await?;
-        //         let statistics = Arc::new(statistics);
-        //         self.collected_statistics.put_with_extra(
-        //             &part_file.object_meta.location,
-        //             Arc::clone(&statistics),
-        //             &part_file.object_meta,
-        //         );
-        //         Ok(statistics)
-        //     }
-        // }
-        todo!()
+        match self
+            .collected_statistics
+            .get_with_extra(&part_file.object_meta.location, &part_file.object_meta)
+        {
+            Some(statistics) => Ok(statistics),
+            None => {
+                let statistics = self
+                    .options
+                    .format
+                    .infer_stats(
+                        ctx,
+                        store,
+                        Arc::clone(&self.file_schema),
+                        &part_file.object_meta,
+                    )
+                    .await?;
+                let statistics = Arc::new(statistics);
+                self.collected_statistics.put_with_extra(
+                    &part_file.object_meta.location,
+                    Arc::clone(&statistics),
+                    &part_file.object_meta,
+                );
+                Ok(statistics)
+            }
+        }
     }
 }
 
@@ -1198,7 +1196,6 @@ mod tests {
 
     use arrow::compute::SortOptions;
     use arrow::record_batch::RecordBatch;
-    use datafusion_common::stats::Precision;
     use datafusion_common::{assert_contains, ScalarValue};
     use datafusion_expr::statistics::ProbabilityDistribution;
     use datafusion_expr::{BinaryExpr, LogicalPlanBuilder, Operator};

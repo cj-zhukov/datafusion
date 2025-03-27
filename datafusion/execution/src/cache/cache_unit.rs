@@ -19,9 +19,8 @@ use std::sync::Arc;
 
 use crate::cache::CacheAccessor;
 
-use datafusion_common::Statistics;
-
 use dashmap::DashMap;
+use datafusion_expr::statistics::TableStatistics;
 use object_store::path::Path;
 use object_store::ObjectMeta;
 
@@ -29,14 +28,14 @@ use object_store::ObjectMeta;
 /// Cache is invalided when file size or last modification has changed
 #[derive(Default)]
 pub struct DefaultFileStatisticsCache {
-    statistics: DashMap<Path, (ObjectMeta, Arc<Statistics>)>,
+    statistics: DashMap<Path, (ObjectMeta, Arc<TableStatistics>)>,
 }
 
-impl CacheAccessor<Path, Arc<Statistics>> for DefaultFileStatisticsCache {
+impl CacheAccessor<Path, Arc<TableStatistics>> for DefaultFileStatisticsCache {
     type Extra = ObjectMeta;
 
     /// Get `Statistics` for file location.
-    fn get(&self, k: &Path) -> Option<Arc<Statistics>> {
+    fn get(&self, k: &Path) -> Option<Arc<TableStatistics>> {
         self.statistics
             .get(k)
             .map(|s| Some(Arc::clone(&s.value().1)))
@@ -44,7 +43,7 @@ impl CacheAccessor<Path, Arc<Statistics>> for DefaultFileStatisticsCache {
     }
 
     /// Get `Statistics` for file location. Returns None if file has changed or not found.
-    fn get_with_extra(&self, k: &Path, e: &Self::Extra) -> Option<Arc<Statistics>> {
+    fn get_with_extra(&self, k: &Path, e: &Self::Extra) -> Option<Arc<TableStatistics>> {
         self.statistics
             .get(k)
             .map(|s| {
@@ -62,22 +61,22 @@ impl CacheAccessor<Path, Arc<Statistics>> for DefaultFileStatisticsCache {
     }
 
     /// Save collected file statistics
-    fn put(&self, _key: &Path, _value: Arc<Statistics>) -> Option<Arc<Statistics>> {
+    fn put(&self, _key: &Path, _value: Arc<TableStatistics>) -> Option<Arc<TableStatistics>> {
         panic!("Put cache in DefaultFileStatisticsCache without Extra not supported.")
     }
 
     fn put_with_extra(
         &self,
         key: &Path,
-        value: Arc<Statistics>,
+        value: Arc<TableStatistics>,
         e: &Self::Extra,
-    ) -> Option<Arc<Statistics>> {
+    ) -> Option<Arc<TableStatistics>> {
         self.statistics
             .insert(key.clone(), (e.clone(), value))
             .map(|x| x.1)
     }
 
-    fn remove(&mut self, k: &Path) -> Option<Arc<Statistics>> {
+    fn remove(&mut self, k: &Path) -> Option<Arc<TableStatistics>> {
         self.statistics.remove(k).map(|x| x.1 .1)
     }
 
@@ -163,7 +162,7 @@ mod tests {
     use crate::cache::CacheAccessor;
     use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
     use chrono::DateTime;
-    use datafusion_common::Statistics;
+    use datafusion_expr::statistics::TableStatistics;
     use object_store::path::Path;
     use object_store::ObjectMeta;
 
@@ -183,11 +182,12 @@ mod tests {
 
         cache.put_with_extra(
             &meta.location,
-            Statistics::new_unknown(&Schema::new(vec![Field::new(
+            TableStatistics::new_unknown(&Schema::new(vec![Field::new(
                 "test_column",
                 DataType::Timestamp(TimeUnit::Second, None),
                 false,
             )]))
+            .unwrap()
             .into(),
             &meta,
         );
