@@ -463,21 +463,21 @@ fn collect_new_statistics(
                 let Some(interval) = interval else {
                     // If the interval is `None`, we can say that there are no rows:
                     return ColumnStatistics {
-                        null_count: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap(),
-                        max_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap(),
-                        min_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap(),
-                        sum_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap(),
+                        null_count: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(),
+                        max_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(),
+                        min_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(),
+                        sum_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(),
                         distinct_count,
                     };
                 };
-                let min_value = ProbabilityDistribution::new_from_interval(interval.clone()).unwrap();
-                let max_value = ProbabilityDistribution::new_from_interval(interval).unwrap();
+                let min_value = ProbabilityDistribution::new_from_interval(interval.clone()).unwrap_or_default();
+                let max_value = ProbabilityDistribution::new_from_interval(interval).unwrap_or_default();
                 ColumnStatistics {
-                    null_count: input_column_stats[idx].null_count.clone().to_inexact().unwrap(),
+                    null_count: input_column_stats[idx].null_count.clone().to_inexact().unwrap_or_default(),
                     max_value,
                     min_value,
-                    sum_value: ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap(),
-                    distinct_count: distinct_count.to_inexact().unwrap(),
+                    sum_value: ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+                    distinct_count: distinct_count.to_inexact().unwrap_or_default(),
                 }
             },
         )

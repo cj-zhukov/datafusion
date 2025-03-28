@@ -34,6 +34,7 @@ use datafusion_datasource::file_format::{
 };
 use datafusion_datasource::write::demux::DemuxedStreamReceiver;
 
+use arrow::compute::sum;
 use arrow::datatypes::{DataType, Field, FieldRef};
 use datafusion_catalog::Session;
 use datafusion_common::config::{ConfigField, ConfigFileType, TableParquetOptions};
@@ -821,25 +822,25 @@ fn summarize_min_max_null_counts(
     stats_converter: &StatisticsConverter,
     row_groups_metadata: &[RowGroupMetaData],
 ) -> Result<()> {
-    // let max_values = stats_converter.row_group_maxes(row_groups_metadata)?;
-    // let min_values = stats_converter.row_group_mins(row_groups_metadata)?;
-    // let null_counts = stats_converter.row_group_null_counts(row_groups_metadata)?;
+    let max_values = stats_converter.row_group_maxes(row_groups_metadata)?;
+    let min_values = stats_converter.row_group_mins(row_groups_metadata)?;
+    let null_counts = stats_converter.row_group_null_counts(row_groups_metadata)?;
 
-    // if let Some(max_acc) = &mut max_accs[arrow_schema_index] {
-    //     max_acc.update_batch(&[max_values])?;
-    // }
+    if let Some(max_acc) = &mut max_accs[arrow_schema_index] {
+        max_acc.update_batch(&[max_values])?;
+    }
 
-    // if let Some(min_acc) = &mut min_accs[arrow_schema_index] {
-    //     min_acc.update_batch(&[min_values])?;
-    // }
+    if let Some(min_acc) = &mut min_accs[arrow_schema_index] {
+        min_acc.update_batch(&[min_values])?;
+    }
 
-    // null_counts_array[arrow_schema_index] = Precision::Exact(match sum(&null_counts) {
-    //     Some(null_count) => null_count as usize,
-    //     None => num_rows,
-    // });
+    let nulls = match sum(&null_counts) {
+        Some(v) => v,
+        None => num_rows as u64,
+    };
+    null_counts_array[arrow_schema_index] = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(nulls)))?;
 
-    // Ok(())
-    todo!()
+    Ok(())
 }
 
 /// Implements [`DataSink`] for writing to a parquet file.
