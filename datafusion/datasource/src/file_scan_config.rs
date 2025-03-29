@@ -1088,7 +1088,6 @@ mod tests {
         compute::SortOptions,
     };
 
-    use datafusion_common::stats::Precision;
     use datafusion_common::{assert_batches_eq, DFSchema};
     use datafusion_expr::{execution_props::ExecutionProps, SortExpr};
     use datafusion_physical_expr::create_physical_expr;

@@ -787,7 +787,6 @@ mod tests {
 
     use arrow::datatypes::{DataType, Field};
     use datafusion_common::assert_batches_eq;
-    use datafusion_common::stats::{ColumnStatistics, Precision};
     use futures::StreamExt;
 
     #[tokio::test]

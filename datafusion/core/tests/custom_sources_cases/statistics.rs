@@ -27,13 +27,13 @@ use datafusion::{
     logical_expr::Expr,
     physical_plan::{
         DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning,
-        PlanProperties, SendableRecordBatchStream, Statistics,
+        PlanProperties, SendableRecordBatchStream,
     },
     prelude::SessionContext,
     scalar::ScalarValue,
 };
 use datafusion_catalog::Session;
-use datafusion_common::{project_schema, stats::Precision};
+use datafusion_common::project_schema;
 use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_physical_expr::EquivalenceProperties;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
@@ -116,16 +116,15 @@ impl TableProvider for StatisticsValidation {
             .map(|i| current_stat.column_statistics[*i].clone())
             .collect::<Vec<ColumnStatistics>>();
         let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
-        // Ok(Arc::new(Self::new(
-        //     TableStatistics {
-        //         num_rows: current_stat.num_rows,
-        //         column_statistics: proj_col_stats,
-        //         // TODO stats: knowing the type of the new columns we can guess the output size
-        //         total_byte_size,
-        //     },
-        //     projected_schema,
-        // )))
-        todo!()
+        Ok(Arc::new(Self::new(
+            TableStatistics {
+                num_rows: current_stat.num_rows,
+                column_statistics: proj_col_stats,
+                // TODO stats: knowing the type of the new columns we can guess the output size
+                total_byte_size,
+            },
+            projected_schema,
+        )))
     }
 }
 

@@ -269,11 +269,13 @@ impl ExecutionPlan for UnionExec {
             .map(|stat| stat.statistics())
             .collect::<Result<Vec<_>>>()?;
 
-        // Ok(stats
-        //     .into_iter()
-        //     .reduce(stats_union)
-        //     .unwrap_or_else(|| TableStatistics::new_unknown(&self.schema())))
-        todo!()
+        match stats
+            .into_iter()
+            .reduce(stats_union) 
+        {
+            Some(res) => Ok(res),
+            None => TableStatistics::new_unknown(&self.schema())
+        }
     }
 
     fn benefits_from_input_partitioning(&self) -> Vec<bool> {
@@ -635,16 +637,16 @@ fn col_stats_union(
     left
 }
 
-fn stats_union(mut left: TableStatistics, right: TableStatistics) -> Result<TableStatistics> {
-    left.num_rows = new_generic_from_binary_op(&Operator::Plus, &left.num_rows, &right.num_rows)?;
-    left.total_byte_size = new_generic_from_binary_op(&Operator::Plus, &left.total_byte_size, &right.total_byte_size)?;
+fn stats_union(mut left: TableStatistics, right: TableStatistics) -> TableStatistics {
+    left.num_rows = new_generic_from_binary_op(&Operator::Plus, &left.num_rows, &right.num_rows).unwrap_or_default();
+    left.total_byte_size = new_generic_from_binary_op(&Operator::Plus, &left.total_byte_size, &right.total_byte_size).unwrap_or_default();
     left.column_statistics = left
         .column_statistics
         .into_iter()
         .zip(right.column_statistics)
         .map(|(a, b)| col_stats_union(a, b))
         .collect::<Vec<_>>();
-    Ok(left)
+    left
 }
 
 #[cfg(test)]
