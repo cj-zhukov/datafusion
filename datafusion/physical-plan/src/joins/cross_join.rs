@@ -41,10 +41,12 @@ use crate::{
 use arrow::array::{RecordBatch, RecordBatchOptions};
 use arrow::compute::concat_batches;
 use arrow::datatypes::{Fields, Schema, SchemaRef};
+use arrow_schema::DataType;
 use datafusion_common::{internal_err, JoinType, Result, ScalarValue};
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryReservation};
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::TableStatistics;
+use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::join_equivalence_properties;
 
 use async_trait::async_trait;
@@ -391,72 +393,67 @@ fn stats_cartesian_product(
     left_stats: TableStatistics,
     right_stats: TableStatistics,
 ) -> Result<TableStatistics> {
-    // let left_row_count = left_stats.num_rows;
-    // let right_row_count = right_stats.num_rows;
+    let left_row_count = left_stats.num_rows;
+    let right_row_count = right_stats.num_rows;
 
-    // // calculate global stats
-    // let num_rows = new_generic_from_binary_op(&Operator::Multiply, &left_row_count, &right_row_count)?;
-    // // the result size is two times a*b because you have the columns of both left and right
-    // let total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &left_stats.total_byte_size, &right_stats.total_byte_size)?;
-    // let right = ProbabilityDistribution::new_uniform(Interval::make(Some(2), Some(2))?)?;
-    // let total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &total_byte_size, &right);
+    // calculate global stats
+    let num_rows = new_generic_from_binary_op(&Operator::Multiply, &left_row_count, &right_row_count)?;
+    // the result size is two times a*b because you have the columns of both left and right
+    let total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &left_stats.total_byte_size, &right_stats.total_byte_size)?;
+    let right = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(2)))?;
+    let total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &total_byte_size, &right)?;
 
-    // let left_col_stats = left_stats.column_statistics;
-    // let right_col_stats = right_stats.column_statistics;
+    let left_col_stats = left_stats.column_statistics;
+    let right_col_stats = right_stats.column_statistics;
 
-    // // the null counts must be multiplied by the row counts of the other side (if defined)
-    // // Min, max and distinct_count on the other hand are invariants.
-    // let cross_join_stats = left_col_stats
-    //     .into_iter()
-    //     .map(|s| {
-    //         let null_count = new_generic_from_binary_op(&Operator::Multiply, &s.null_count, &right_row_count).unwrap();
-    //         let sum_value = new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, right)
+    // the null counts must be multiplied by the row counts of the other side (if defined)
+    // Min, max and distinct_count on the other hand are invariants.
+    let cross_join_stats = left_col_stats
+        .into_iter()
+        .map(|s| {
+            let null_count = new_generic_from_binary_op(&Operator::Multiply, &s.null_count, &right_row_count).unwrap_or_default();
+            let sum_value = new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, &right).unwrap_or_default();
 
-    //         ColumnStatisticsNew {
-    //             null_count,
-    //             distinct_count: s.distinct_count,
-    //             min_value: s.min_value,
-    //             max_value: s.max_value,
-    //             sum_value: s
-    //                 .sum_value
-    //                 .get_value()
-    //                 // Cast the row count into the same type as any existing sum value
-    //                 .and_then(|v| {
-    //                     Precision::<ScalarValue>::from(right_row_count)
-    //                         .cast_to(&v.data_type())
-    //                         .ok()
-    //                 })
-    //                 .map(|row_count| s.sum_value.multiply(&row_count))
-    //                 .unwrap_or(Precision::Absent),
-    //         }
-    //     })
-    //     .chain(right_col_stats.into_iter().map(|s| {
-    //         ColumnStatistics {
-    //             null_count: s.null_count.multiply(&left_row_count),
-    //             distinct_count: s.distinct_count,
-    //             min_value: s.min_value,
-    //             max_value: s.max_value,
-    //             sum_value: s
-    //                 .sum_value
-    //                 .get_value()
-    //                 // Cast the row count into the same type as any existing sum value
-    //                 .and_then(|v| {
-    //                     Precision::<ScalarValue>::from(left_row_count)
-    //                         .cast_to(&v.data_type())
-    //                         .ok()
-    //                 })
-    //                 .map(|row_count| s.sum_value.multiply(&row_count))
-    //                 .unwrap_or(Precision::Absent),
-    //         }
-    //     }))
-    //     .collect();
+            ColumnStatistics {
+                null_count,
+                distinct_count: s.distinct_count,
+                min_value: s.min_value,
+                max_value: s.max_value,
+                sum_value: s
+                    .sum_value
+                    .get_value()
+                    .map(|row_count| {
+                        let row_count = ProbabilityDistribution::new_exact(row_count.clone()).unwrap_or_default();
+                        new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, &row_count).unwrap_or_default()
+                    })
+                    .unwrap_or(ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default()),
+            }
+        })
+        .chain(right_col_stats.into_iter().map(|s| {
+            let null_count = new_generic_from_binary_op(&Operator::Multiply, &s.null_count, &left_row_count).unwrap_or_default();
+            
+            ColumnStatistics {
+                null_count,
+                distinct_count: s.distinct_count,
+                min_value: s.min_value,
+                max_value: s.max_value,
+                sum_value: s
+                    .sum_value
+                    .get_value()
+                    .map(|row_count| {
+                        let row_count = ProbabilityDistribution::new_exact(row_count.clone()).unwrap_or_default();
+                        new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, &row_count).unwrap_or_default()
+                    })
+                    .unwrap_or(ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default()),
+            }
+        }))
+        .collect();
 
-    // Statistics {
-    //     num_rows,
-    //     total_byte_size,
-    //     column_statistics: cross_join_stats,
-    // }
-    todo!()
+    Ok(TableStatistics {
+        num_rows,
+        total_byte_size,
+        column_statistics: cross_join_stats,
+    })
 }
 
 /// A stream that issues [RecordBatch]es as they arrive from the right  of the join.

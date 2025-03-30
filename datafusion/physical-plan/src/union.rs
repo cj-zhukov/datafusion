@@ -488,11 +488,15 @@ impl ExecutionPlan for InterleaveExec {
             .map(|stat| stat.statistics())
             .collect::<Result<Vec<_>>>()?;
 
-        // Ok(stats
-        //     .into_iter()
-        //     .reduce(stats_union)
-        //     .unwrap_or_else(|| TableStatistics::new_unknown(&self.schema())))
-        todo!()
+        match stats
+            .into_iter()
+            .reduce(stats_union) {
+                Some(stats) => Ok(stats),
+                None => {
+                    let stats = TableStatistics::new_unknown(&self.schema())?;
+                    Ok(stats)
+                }
+            }
     }
 
     fn benefits_from_input_partitioning(&self) -> Vec<bool> {
