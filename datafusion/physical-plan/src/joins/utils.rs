@@ -975,60 +975,39 @@ fn max_distinct_count(
     num_rows: &ProbabilityDistribution,
     stats: &ColumnStatistics,
 ) -> ProbabilityDistribution {
-    // match &stats.distinct_count {
-    //     &dc @ (Precision::Exact(_) | Precision::Inexact(_)) => dc,
-    //     _ => {
-    //         // The number can never be greater than the number of rows we have
-    //         // minus the nulls (since they don't count as distinct values).
-    //         let result = match num_rows {
-    //             Precision::Absent => Precision::Absent,
-    //             Precision::Inexact(count) => {
-    //                 // To safeguard against inexact number of rows (e.g. 0) being smaller than
-    //                 // an exact null count we need to do a checked subtraction.
-    //                 match count.checked_sub(*stats.null_count.get_value().unwrap_or(&0)) {
-    //                     None => Precision::Inexact(0),
-    //                     Some(non_null_count) => Precision::Inexact(non_null_count),
-    //                 }
-    //             }
-    //             Precision::Exact(count) => {
-    //                 let count = count - stats.null_count.get_value().unwrap_or(&0);
-    //                 if stats.null_count.is_exact().unwrap_or(false) {
-    //                     Precision::Exact(count)
-    //                 } else {
-    //                     Precision::Inexact(count)
-    //                 }
-    //             }
-    //         };
-    //         // Cap the estimate using the number of possible values:
-    //         if let (Some(min), Some(max)) =
-    //             (stats.min_value.get_value(), stats.max_value.get_value())
-    //         {
-    //             if let Some(range_dc) = Interval::try_new(min.clone(), max.clone())
-    //                 .ok()
-    //                 .and_then(|e| e.cardinality())
-    //             {
-    //                 let range_dc = range_dc as usize;
-    //                 // Note that the `unwrap` calls in the below statement are safe.
-    //                 return if matches!(result, Precision::Absent)
-    //                     || &range_dc < result.get_value().unwrap()
-    //                 {
-    //                     if stats.min_value.is_exact().unwrap()
-    //                         && stats.max_value.is_exact().unwrap()
-    //                     {
-    //                         Precision::Exact(range_dc)
-    //                     } else {
-    //                         Precision::Inexact(range_dc)
-    //                     }
-    //                 } else {
-    //                     result
-    //                 };
-    //             }
-    //         }
+    let result = match num_rows.get_value() {
+        None => ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+        Some(val) => {
+            let zero = ScalarValue::new_zero(&DataType::UInt64).unwrap();
+            let null_count = stats.null_count.get_value().unwrap_or(&zero);
+            let count = val.sub(null_count).unwrap();
+            ProbabilityDistribution::new_exact(count).unwrap_or_default()
+        },
+    };
 
-    //         result
-    //     }
-    // }
-    todo!()
+    if let (Some(min), Some(max)) =
+        (stats.min_value.get_value(), stats.max_value.get_value())
+    {
+        if let Some(range_dc) = Interval::try_new(min.clone(), max.clone())
+            .ok()
+            .and_then(|e| e.cardinality())
+        {
+            return if &ScalarValue::UInt64(Some(range_dc)) < &result.get_value().unwrap_or(&ScalarValue::Null)
+            {
+                if stats.min_value.is_exact().unwrap()
+                    && stats.max_value.is_exact().unwrap()
+                {
+                    ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(range_dc))).unwrap_or_default()
+                } else {
+                    ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default()
+                }
+            } else {
+                result
+            };
+        }
+    }
+
+    result    
 }
 
 enum OnceFutState<T> {
