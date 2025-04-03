@@ -776,7 +776,8 @@ fn estimate_join_cardinality(
             }
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
-
+    
+    let scalar_null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
     match join_type {
         JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
             let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
@@ -809,7 +810,7 @@ fn estimate_join_cardinality(
             };
 
             Some(PartialJoinStatistics {
-                num_rows: cardinality.get_value().unwrap_or(&ScalarValue::Null).clone(),
+                num_rows: cardinality.get_value().unwrap_or(&scalar_null).clone(),
                 // We don't do anything specific here, just combine the existing
                 // statistics which might yield subpar results (although it is
                 // true, esp regarding min/max). For a better estimation, we need
@@ -836,7 +837,7 @@ fn estimate_join_cardinality(
             };
 
             Some(PartialJoinStatistics {
-                num_rows: cardinality.unwrap_or(ScalarValue::Null),
+                num_rows: cardinality.unwrap_or(scalar_null),
                 column_statistics: outer_stats.column_statistics,
             })
         }
@@ -850,7 +851,7 @@ fn estimate_join_cardinality(
             };
 
             Some(PartialJoinStatistics {
-                num_rows: outer_stats.num_rows.get_value().unwrap_or(&ScalarValue::Null).clone(),
+                num_rows: outer_stats.num_rows.get_value().unwrap_or(&scalar_null).clone(),
                 column_statistics: outer_stats.column_statistics,
             })
         }
@@ -859,7 +860,7 @@ fn estimate_join_cardinality(
             let mut column_statistics = left_stats.column_statistics;
             column_statistics.push(ColumnStatistics::new_unknown().unwrap_or_default());
             Some(PartialJoinStatistics {
-                num_rows: left_stats.num_rows.get_value().unwrap_or(&ScalarValue::Null).clone(),
+                num_rows: left_stats.num_rows.get_value().unwrap_or(&scalar_null).clone(),
                 column_statistics,
             })
         }
@@ -910,7 +911,8 @@ fn estimate_inner_join_cardinality(
     // With the assumption that the smaller input's domain is generally represented in the bigger
     // input's domain, we can estimate the inner join's cardinality by taking the cartesian product
     // of the two inputs and normalizing it by the selectivity factor.
-    let value = join_selectivity.get_value().unwrap_or(&ScalarValue::Null);
+    let null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
+    let value = join_selectivity.get_value().unwrap_or(&null);
     if value > &ScalarValue::new_one(&DataType::UInt64).unwrap() {
         let res = new_generic_from_binary_op(&Operator::Multiply, &left_stats.num_rows, &right_stats.num_rows).unwrap();
         Some(new_generic_from_binary_op(&Operator::Divide, &res, &join_selectivity).unwrap())
@@ -938,6 +940,7 @@ fn estimate_disjoint_inputs(
     left_stats: &TableStatistics,
     right_stats: &TableStatistics,
 ) -> Option<ProbabilityDistribution> {
+    let null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
     for (left_stat, right_stat) in left_stats
         .column_statistics
         .iter()
@@ -946,16 +949,16 @@ fn estimate_disjoint_inputs(
         // If there is no overlap in any of the join columns, this means the join
         // itself is disjoint and the cardinality is 0. Though we can only assume
         // this when the statistics are exact (since it is a very strong assumption).
-        let left_min_val = left_stat.min_value.get_value().unwrap_or(&ScalarValue::Null);
-        let right_max_val = right_stat.max_value.get_value().unwrap_or(&ScalarValue::Null);
+        let left_min_val = left_stat.min_value.get_value().unwrap_or(&null);
+        let right_max_val = right_stat.max_value.get_value().unwrap_or(&null);
         if left_min_val > right_max_val {
             return Some(
                 ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default()
             );
         }
 
-        let left_max_val = left_stat.max_value.get_value().unwrap_or(&ScalarValue::Null);
-        let right_min_val = right_stat.min_value.get_value().unwrap_or(&ScalarValue::Null);
+        let left_max_val = left_stat.max_value.get_value().unwrap_or(&null);
+        let right_min_val = right_stat.min_value.get_value().unwrap_or(&null);
         if left_max_val < right_min_val
         {
             return Some(
@@ -992,7 +995,8 @@ fn max_distinct_count(
             .ok()
             .and_then(|e| e.cardinality())
         {
-            return if &ScalarValue::UInt64(Some(range_dc)) < &result.get_value().unwrap_or(&ScalarValue::Null)
+            let null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
+            return if &ScalarValue::UInt64(Some(range_dc)) < &result.get_value().unwrap_or(&null)
             {
                 if stats.min_value.is_exact().unwrap()
                     && stats.max_value.is_exact().unwrap()

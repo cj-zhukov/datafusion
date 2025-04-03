@@ -105,8 +105,7 @@ impl ExprBoundaries {
                 schema.fields.len()
             )
         })?;
-        let empty_field =
-            ScalarValue::try_from(field.data_type()).unwrap_or(ScalarValue::Null);
+        let empty_field = ScalarValue::try_from(field.data_type())?;
         let min_value = col_stats.min_value.get_value().unwrap_or(&empty_field).clone();
         let max_value = col_stats.max_value.get_value().unwrap_or(&empty_field).clone();
         let interval = Interval::try_new(min_value, max_value)?;

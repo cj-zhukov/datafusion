@@ -41,7 +41,7 @@ use arrow::record_batch::{RecordBatch, RecordBatchOptions};
 use datafusion_common::tree_node::{
     Transformed, TransformedResult, TreeNode, TreeNodeRecursion,
 };
-use datafusion_common::{internal_err, JoinSide, Result};
+use datafusion_common::{internal_err, JoinSide, Result, ScalarValue};
 use datafusion_execution::TaskContext;
 use datafusion_expr::interval_arithmetic::Interval;
 use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
@@ -318,7 +318,7 @@ fn stats_projection(
     }
 
     if primitive_row_size_possible {
-        let prim_row_size = ProbabilityDistribution::new_uniform(Interval::make(Some(primitive_row_size as u64), Some(primitive_row_size as u64))?)?;
+        let prim_row_size = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(primitive_row_size as u64)))?;
         stats.total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &prim_row_size, &stats.num_rows)?;
     }
     stats.column_statistics = column_statistics;

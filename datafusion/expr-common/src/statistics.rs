@@ -88,17 +88,18 @@ impl ProbabilityDistribution {
     /// Constructs a new [`Generic`] distribution from the given range. Other
     /// parameters (mean, median and variance) are initialized with null values.
     pub fn new_from_interval(range: Interval) -> Result<Self> {
-        let null = ScalarValue::try_from(range.data_type())?;
-        Self::new_generic(null.clone(), null.clone(), null, range)
+        let scalar_null = ScalarValue::try_new_null(&range.data_type())?;
+        Self::new_generic(scalar_null.clone(), scalar_null.clone(), scalar_null, range)
     }
 
     /// Constructs a new [`Generic`] distribution from the given type and infinity range. Other
     /// parameters (mean, median and variance) are initialized with null values.
     pub fn new_unknown(data_type: &DataType) -> Result<Self> {
+        let scalar_null = ScalarValue::try_new_null(data_type)?;
         Self::new_generic(
-            ScalarValue::Null,
-            ScalarValue::Null,
-            ScalarValue::Null,
+            scalar_null.clone(),
+            scalar_null.clone(),
+            scalar_null,
             Interval::make_non_negative_infinity_interval(data_type)?,
         )
     }
@@ -289,9 +290,10 @@ impl ProbabilityDistribution {
     }
 
     pub fn with_estimated_selectivity(self, selectivity: f64) -> Self {
-        let value = self.get_value().unwrap_or(&ScalarValue::Null);
+        let scalar_null = ScalarValue::try_new_null(&self.data_type()).unwrap();
+        let value = self.get_value().unwrap_or(&scalar_null);
         let selectivity = ScalarValue::Float64(Some(selectivity));
-        let res = value.mul(selectivity).unwrap_or(ScalarValue::Null);
+        let res = value.mul(selectivity).unwrap_or(scalar_null);
         ProbabilityDistribution::new_exact(res).unwrap_or_default()
     }
 
@@ -370,8 +372,9 @@ pub struct GaussianDistribution {
 
 impl GaussianDistribution {
     pub fn get_value(&self) -> Option<&ScalarValue> {
-        if self.variance() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(ScalarValue::Null) &&
-            self.mean() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(ScalarValue::Null) {
+        let scalar_null = ScalarValue::try_from(self.data_type()).unwrap();
+        if self.variance() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(scalar_null.clone()) &&
+            self.mean() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(scalar_null) {
                 return Some(self.variance());
             }
         None
@@ -389,7 +392,9 @@ pub struct BernoulliDistribution {
 
 impl BernoulliDistribution {
     pub fn get_value(&self) -> Option<&ScalarValue> {
-        if self.p_value() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(ScalarValue::Null) || self.p_value() == &ScalarValue::new_one(&DataType::UInt64).unwrap_or(ScalarValue::Null) {
+        let scalar_null = ScalarValue::try_from(self.data_type()).unwrap();
+        if self.p_value() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(scalar_null.clone()) 
+        || self.p_value() == &ScalarValue::new_one(&DataType::UInt64).unwrap_or(scalar_null) {
             return Some(self.p_value());
         }
         None
@@ -410,7 +415,8 @@ pub struct GenericDistribution {
 
 impl GenericDistribution {
     pub fn get_value(&self) -> Option<&ScalarValue> {
-        if self.variance() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(ScalarValue::Null) && 
+        let scalar_null = ScalarValue::try_from(self.data_type()).unwrap();
+        if self.variance() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(scalar_null) && 
         (self.range().lower() == self.range().upper()) {
             return Some(self.range().lower());
         }
@@ -1126,7 +1132,7 @@ impl TableStatistics {
         let skip = ScalarValue::UInt64(Some(skip as u64));
         let fetch = fetch.map(|v| v as u64);
         let fetch = ScalarValue::UInt64(fetch);
-        let num_rows = self.num_rows.get_value().unwrap_or(&ScalarValue::Null).clone();
+        let num_rows = self.num_rows.get_value().unwrap_or(&ScalarValue::UInt64(None)).clone();
 
         self.num_rows = if num_rows <= fetch && skip == ScalarValue::new_one(&DataType::UInt64)? {
             self.num_rows

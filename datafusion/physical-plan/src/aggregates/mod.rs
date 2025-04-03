@@ -950,10 +950,11 @@ impl ExecutionPlan for AggregateExec {
             _ => {
                 // When the input row count is 0 or 1, we can adopt that statistic keeping its reliability.
                 // When it is larger than 1, we degrade the precision since it may decrease after aggregation.
+                let scalar_null = ScalarValue::try_new_null(&DataType::UInt64)?;
                 let num_rows = self.input().statistics()?.num_rows;
-                let num_rows = if num_rows.get_value().unwrap_or(&ScalarValue::Null) > &ScalarValue::new_one(&DataType::UInt64)? {
+                let num_rows = if num_rows.get_value().unwrap_or(&scalar_null) > &ScalarValue::new_one(&DataType::UInt64)? {
                     self.input().statistics()?.num_rows.to_inexact()?
-                } else if num_rows.get_value().unwrap_or(&ScalarValue::Null) == &ScalarValue::new_zero(&DataType::UInt64)? {
+                } else if num_rows.get_value().unwrap_or(&scalar_null) == &ScalarValue::new_zero(&DataType::UInt64)? {
                     let n_rows = self.input().statistics()?.num_rows;
                     let to_add = ProbabilityDistribution::new_exact(ScalarValue::new_one(&DataType::UInt64)?)?;
                     self.input().statistics()?.num_rows = new_generic_from_binary_op(&Operator::Plus, &n_rows, &to_add)?;

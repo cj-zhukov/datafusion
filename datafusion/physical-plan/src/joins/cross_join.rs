@@ -412,7 +412,6 @@ fn stats_cartesian_product(
         .into_iter()
         .map(|s| {
             let null_count = new_generic_from_binary_op(&Operator::Multiply, &s.null_count, &right_row_count).unwrap_or_default();
-            let sum_value = new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, &right).unwrap_or_default();
 
             ColumnStatistics {
                 null_count,

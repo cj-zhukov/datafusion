@@ -147,30 +147,8 @@ fn set_max_if_greater(
     max_nominee: &ProbabilityDistribution,
     max_value: &mut ProbabilityDistribution,
 ) {
-    // match (&max_value, max_nominee) {
-    //     (Precision::Exact(val1), Precision::Exact(val2)) if val1 < val2 => {
-    //         *max_value = max_nominee.clone();
-    //     }
-    //     (Precision::Exact(val1), Precision::Inexact(val2))
-    //     | (Precision::Inexact(val1), Precision::Inexact(val2))
-    //     | (Precision::Inexact(val1), Precision::Exact(val2))
-    //         if val1 < val2 =>
-    //     {
-    //         *max_value = max_nominee.clone().to_inexact();
-    //     }
-    //     (Precision::Exact(_), Precision::Absent) => {
-    //         let exact_max = mem::take(max_value);
-    //         *max_value = exact_max.to_inexact();
-    //     }
-    //     (Precision::Absent, Precision::Exact(_)) => {
-    //         *max_value = max_nominee.clone().to_inexact();
-    //     }
-    //     (Precision::Absent, Precision::Inexact(_)) => {
-    //         *max_value = max_nominee.clone();
-    //     }
-    //     _ => {}
-    // }
-    if max_nominee.get_value().unwrap_or(&ScalarValue::Null) < max_value.get_value().unwrap_or(&ScalarValue::Null) {
+    let scalar_null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
+    if max_nominee.get_value().unwrap_or(&scalar_null) < max_value.get_value().unwrap_or(&scalar_null) {
         *max_value = max_nominee.clone();
     }
 }
@@ -181,30 +159,8 @@ fn set_min_if_lesser(
     min_nominee: &ProbabilityDistribution,
     min_value: &mut ProbabilityDistribution,
 ) {
-    // match (&min_value, min_nominee) {
-    //     (Precision::Exact(val1), Precision::Exact(val2)) if val1 > val2 => {
-    //         *min_value = min_nominee.clone();
-    //     }
-    //     (Precision::Exact(val1), Precision::Inexact(val2))
-    //     | (Precision::Inexact(val1), Precision::Inexact(val2))
-    //     | (Precision::Inexact(val1), Precision::Exact(val2))
-    //         if val1 > val2 =>
-    //     {
-    //         *min_value = min_nominee.clone().to_inexact();
-    //     }
-    //     (Precision::Exact(_), Precision::Absent) => {
-    //         let exact_min = mem::take(min_value);
-    //         *min_value = exact_min.to_inexact();
-    //     }
-    //     (Precision::Absent, Precision::Exact(_)) => {
-    //         *min_value = min_nominee.clone().to_inexact();
-    //     }
-    //     (Precision::Absent, Precision::Inexact(_)) => {
-    //         *min_value = min_nominee.clone();
-    //     }
-    //     _ => {}
-    // }
-    if min_nominee.get_value().unwrap_or(&ScalarValue::Null) > min_value.get_value().unwrap_or(&ScalarValue::Null) {
+    let scalar_null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
+    if min_nominee.get_value().unwrap_or(&scalar_null) > min_value.get_value().unwrap_or(&scalar_null) {
         *min_value = min_nominee.clone();
     }
 }
