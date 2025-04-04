@@ -25,7 +25,7 @@ use crate::type_coercion::binary::binary_numeric_coercion;
 use arrow::array::ArrowNativeTypeOp;
 use arrow::datatypes::{DataType, Schema, SchemaRef};
 use datafusion_common::rounding::alter_fp_rounding_mode;
-use datafusion_common::{internal_err, not_impl_err, Result, ScalarValue};
+use datafusion_common::{internal_err, not_impl_err, ExprSchema, Result, ScalarValue, ToDFSchema};
 
 /// This object defines probabilistic distributions that encode uncertain
 /// information about a single, scalar value. Currently, we support five core
@@ -250,7 +250,7 @@ impl ProbabilityDistribution {
 
     pub fn to_inexact(self) -> Result<Self> {
         let res = match self {
-            Uniform(dist) => Generic(GenericDistribution::try_new(ScalarValue::Null, ScalarValue::Null, ScalarValue::Null,dist.range().clone())?),
+            Uniform(dist) => ProbabilityDistribution::new_unknown(&dist.data_type())?,
             Exponential(_dist) => todo!(),
             Gaussian(_dist) => todo!(),
             Bernoulli(_dist) => todo!(),
@@ -372,9 +372,9 @@ pub struct GaussianDistribution {
 
 impl GaussianDistribution {
     pub fn get_value(&self) -> Option<&ScalarValue> {
-        let scalar_null = ScalarValue::try_from(self.data_type()).unwrap();
-        if self.variance() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(scalar_null.clone()) &&
-            self.mean() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(scalar_null) {
+        let scalar_null = ScalarValue::try_new_null(&self.data_type()).unwrap();
+        if self.variance() == &ScalarValue::new_zero(&self.data_type()).unwrap_or(scalar_null.clone()) &&
+            self.mean() == &ScalarValue::new_zero(&self.data_type()).unwrap_or(scalar_null) {
                 return Some(self.variance());
             }
         None
@@ -392,9 +392,9 @@ pub struct BernoulliDistribution {
 
 impl BernoulliDistribution {
     pub fn get_value(&self) -> Option<&ScalarValue> {
-        let scalar_null = ScalarValue::try_from(self.data_type()).unwrap();
-        if self.p_value() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(scalar_null.clone()) 
-        || self.p_value() == &ScalarValue::new_one(&DataType::UInt64).unwrap_or(scalar_null) {
+        let scalar_null = ScalarValue::try_new_null(&self.data_type()).unwrap();
+        if self.p_value() == &ScalarValue::new_zero(&self.data_type()).unwrap_or(scalar_null.clone()) 
+        || self.p_value() == &ScalarValue::new_one(&self.data_type()).unwrap_or(scalar_null) {
             return Some(self.p_value());
         }
         None
@@ -415,8 +415,8 @@ pub struct GenericDistribution {
 
 impl GenericDistribution {
     pub fn get_value(&self) -> Option<&ScalarValue> {
-        let scalar_null = ScalarValue::try_from(self.data_type()).unwrap();
-        if self.variance() == &ScalarValue::new_zero(&DataType::UInt64).unwrap_or(scalar_null) && 
+        let scalar_null = ScalarValue::try_new_null(&self.data_type()).unwrap();
+        if self.variance() == &ScalarValue::new_zero(&self.data_type()).unwrap_or(scalar_null) && 
         (self.range().lower() == self.range().upper()) {
             return Some(self.range().lower());
         }
@@ -1164,7 +1164,7 @@ fn check_num_rows(value: Option<ScalarValue>, is_exact: bool) -> Result<Probabil
         if is_exact {
             ProbabilityDistribution::new_exact(value)
         } else {
-            ProbabilityDistribution::new_unknown(&DataType::UInt64)
+            ProbabilityDistribution::new_unknown(&value.data_type())
         }
     } else {
         ProbabilityDistribution::new_unknown(&DataType::UInt64)

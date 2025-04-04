@@ -43,7 +43,6 @@ use datafusion_common::tree_node::{
 };
 use datafusion_common::{internal_err, JoinSide, Result, ScalarValue};
 use datafusion_execution::TaskContext;
-use datafusion_expr::interval_arithmetic::Interval;
 use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::ProjectionMapping;

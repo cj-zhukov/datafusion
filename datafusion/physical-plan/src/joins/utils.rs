@@ -882,7 +882,7 @@ fn estimate_inner_join_cardinality(
 
     // The algorithm here is partly based on the non-histogram selectivity estimation
     // from Spark's Catalyst optimizer.
-    let mut join_selectivity = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap();
+    let mut join_selectivity = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
     for (left_stat, right_stat) in left_stats
         .column_statistics
         .iter()
@@ -914,8 +914,8 @@ fn estimate_inner_join_cardinality(
     let null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
     let value = join_selectivity.get_value().unwrap_or(&null);
     if value > &ScalarValue::new_one(&DataType::UInt64).unwrap() {
-        let res = new_generic_from_binary_op(&Operator::Multiply, &left_stats.num_rows, &right_stats.num_rows).unwrap();
-        Some(new_generic_from_binary_op(&Operator::Divide, &res, &join_selectivity).unwrap())
+        let res = new_generic_from_binary_op(&Operator::Multiply, &left_stats.num_rows, &right_stats.num_rows).unwrap_or_default();
+        Some(new_generic_from_binary_op(&Operator::Divide, &res, &join_selectivity).unwrap_or_default())
     } else {
         None
     }
