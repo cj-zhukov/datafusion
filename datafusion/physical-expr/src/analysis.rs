@@ -128,7 +128,7 @@ impl ExprBoundaries {
                 Ok(Self {
                     column: Column::new(field.name(), i),
                     interval: Some(Interval::make_unbounded(field.data_type())?),
-                    distinct_count: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
+                    distinct_count: ProbabilityDistribution::new_unknown(field.data_type())?,
                 })
             })
             .collect()

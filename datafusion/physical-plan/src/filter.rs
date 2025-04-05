@@ -463,11 +463,11 @@ fn collect_new_statistics(
                 let Some(interval) = interval else {
                     // If the interval is `None`, we can say that there are no rows:
                     return ColumnStatistics {
-                        null_count: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(),
-                        max_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(),
-                        min_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(),
-                        sum_value: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(),
-                        distinct_count,
+                        null_count: ProbabilityDistribution::new_zero(&input_column_stats[idx].null_count.data_type()).unwrap_or_default(),
+                        max_value: ProbabilityDistribution::new_unknown(&input_column_stats[idx].max_value.data_type()).unwrap_or_default(),
+                        min_value: ProbabilityDistribution::new_unknown(&input_column_stats[idx].min_value.data_type()).unwrap_or_default(),
+                        sum_value: ProbabilityDistribution::new_unknown(&input_column_stats[idx].sum_value.data_type()).unwrap_or_default(),
+                        distinct_count: ProbabilityDistribution::new_zero(&input_column_stats[idx].distinct_count.data_type()).unwrap_or_default(),
                     };
                 };
                 let min_value = ProbabilityDistribution::new_from_interval(interval.clone()).unwrap_or_default();
@@ -476,7 +476,7 @@ fn collect_new_statistics(
                     null_count: input_column_stats[idx].null_count.clone().to_inexact().unwrap_or_default(),
                     max_value,
                     min_value,
-                    sum_value: ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+                    sum_value: ProbabilityDistribution::new_unknown(&input_column_stats[idx].sum_value.data_type()).unwrap_or_default(),
                     distinct_count: distinct_count.to_inexact().unwrap_or_default(),
                 }
             },

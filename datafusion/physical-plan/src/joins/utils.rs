@@ -737,12 +737,12 @@ pub(crate) fn estimate_join_statistics(
     let left_stats = left.statistics()?;
     let right_stats = right.statistics()?;
 
-    let join_stats = estimate_join_cardinality(join_type, left_stats, right_stats, &on);
+    let join_stats = estimate_join_cardinality(join_type, left_stats.clone(), right_stats, &on);
     let (num_rows, column_statistics) = match join_stats {
-        Some(stats) => (ProbabilityDistribution::new_uniform(Interval::try_new(stats.num_rows.clone(), stats.num_rows)?)?, stats.column_statistics),
-        None => (ProbabilityDistribution::new_unknown(&DataType::UInt64)?, TableStatistics::unknown_column(schema)?)
+        Some(stats) => (ProbabilityDistribution::new_exact(stats.num_rows)?, stats.column_statistics),
+        None => (ProbabilityDistribution::new_unknown(&left_stats.num_rows.data_type())?, TableStatistics::unknown_column(schema)?)
     };
-    let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+    let total_byte_size = ProbabilityDistribution::new_unknown(&left_stats.total_byte_size.data_type())?;
 
     Ok(TableStatistics {
         num_rows,
@@ -777,10 +777,10 @@ fn estimate_join_cardinality(
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
     
-    let scalar_null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
+    let scalar_null = ScalarValue::try_new_null(&left_stats.num_rows.data_type()).unwrap();
     match join_type {
         JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
-            let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
+            let total_byte_size = ProbabilityDistribution::new_unknown(&left_stats.total_byte_size.data_type()).unwrap_or_default();
             let ij_cardinality = estimate_inner_join_cardinality(
                 TableStatistics {
                     num_rows: left_stats.num_rows.clone(),
@@ -802,10 +802,12 @@ fn estimate_join_cardinality(
                 JoinType::Inner => ij_cardinality,
                 JoinType::Left => ij_cardinality.max(&left_stats.num_rows),
                 JoinType::Right => ij_cardinality.max(&right_stats.num_rows),
-                // JoinType::Full => ij_cardinality
-                //     .max(&left_stats.num_rows)
-                //     .add(&ij_cardinality.max(&right_stats.num_rows))
-                //     .sub(&ij_cardinality),
+                JoinType::Full => {
+                    let left_max = ij_cardinality.max(&left_stats.num_rows);
+                    let right_max = ij_cardinality.max(&right_stats.num_rows);
+                    let to_add = new_generic_from_binary_op(&Operator::Plus, &left_max, &right_max).unwrap_or_default();
+                    new_generic_from_binary_op(&Operator::Minus, &to_add, &ij_cardinality).unwrap_or_default()
+                }
                 _ => unreachable!(),
             };
 
@@ -882,7 +884,7 @@ fn estimate_inner_join_cardinality(
 
     // The algorithm here is partly based on the non-histogram selectivity estimation
     // from Spark's Catalyst optimizer.
-    let mut join_selectivity = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
+    let mut join_selectivity = ProbabilityDistribution::new_unknown(&left_stats.num_rows.data_type()).unwrap_or_default();
     for (left_stat, right_stat) in left_stats
         .column_statistics
         .iter()
@@ -911,9 +913,9 @@ fn estimate_inner_join_cardinality(
     // With the assumption that the smaller input's domain is generally represented in the bigger
     // input's domain, we can estimate the inner join's cardinality by taking the cartesian product
     // of the two inputs and normalizing it by the selectivity factor.
-    let null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
-    let value = join_selectivity.get_value().unwrap_or(&null);
-    if value > &ScalarValue::new_one(&DataType::UInt64).unwrap() {
+    let scalar_null = ScalarValue::try_new_null(&join_selectivity.data_type()).unwrap();
+    let value = join_selectivity.get_value().unwrap_or(&scalar_null);
+    if value > &ScalarValue::new_one(&join_selectivity.data_type()).unwrap() {
         let res = new_generic_from_binary_op(&Operator::Multiply, &left_stats.num_rows, &right_stats.num_rows).unwrap_or_default();
         Some(new_generic_from_binary_op(&Operator::Divide, &res, &join_selectivity).unwrap_or_default())
     } else {
@@ -981,7 +983,7 @@ fn max_distinct_count(
     let result = match num_rows.get_value() {
         None => ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
         Some(val) => {
-            let zero = ScalarValue::new_zero(&DataType::UInt64).unwrap();
+            let zero = ScalarValue::new_zero(&val.data_type()).unwrap();
             let null_count = stats.null_count.get_value().unwrap_or(&zero);
             let count = val.sub(null_count).unwrap();
             ProbabilityDistribution::new_exact(count).unwrap_or_default()
@@ -995,7 +997,7 @@ fn max_distinct_count(
             .ok()
             .and_then(|e| e.cardinality())
         {
-            let null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
+            let null = ScalarValue::try_new_null(&min.data_type()).unwrap();
             return if &ScalarValue::UInt64(Some(range_dc)) < &result.get_value().unwrap_or(&null)
             {
                 if stats.min_value.is_exact().unwrap()
@@ -1003,7 +1005,7 @@ fn max_distinct_count(
                 {
                     ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(range_dc))).unwrap_or_default()
                 } else {
-                    ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default()
+                    ProbabilityDistribution::new_unknown(&min.data_type()).unwrap_or_default()
                 }
             } else {
                 result

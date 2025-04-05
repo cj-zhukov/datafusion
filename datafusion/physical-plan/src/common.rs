@@ -287,6 +287,7 @@ mod tests {
         array::{Float32Array, Float64Array, UInt64Array},
         datatypes::{DataType, Field},
     };
+    use datafusion_common::ScalarValue;
 
     #[test]
     fn test_compute_record_batch_statistics_empty() -> Result<()> {
@@ -328,22 +329,22 @@ mod tests {
             compute_record_batch_statistics(&[vec![batch]], &schema, select_projection)?;
 
         let expected = TableStatistics {
-            num_rows: ProbabilityDistribution::new_uniform(Interval::make(Some(3), Some(3))?)?,
-            total_byte_size: ProbabilityDistribution::new_uniform(Interval::make(Some(byte_size as u64), Some(byte_size as u64))?)?,
+            num_rows: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(3)))?,
+            total_byte_size: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(byte_size as u64)))?,
             column_statistics: vec![
                 ColumnStatistics {
                     distinct_count: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                     max_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                     min_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                     sum_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    null_count: ProbabilityDistribution::new_uniform(Interval::make_zero(&DataType::UInt64)?)?,
+                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(0)))?,
                 },
                 ColumnStatistics {
                     distinct_count: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                     max_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                     min_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                     sum_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    null_count: ProbabilityDistribution::new_uniform(Interval::make_zero(&DataType::UInt64)?)?,
+                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(0)))?,
                 },
             ],
         };

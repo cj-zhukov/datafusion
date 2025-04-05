@@ -282,7 +282,7 @@ impl ExecutionPlan for WindowAggExec {
         for _ in 0..win_cols {
             column_statistics.push(ColumnStatistics::new_unknown()?)
         }
-        let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        let total_byte_size = ProbabilityDistribution::new_unknown(&input_stat.total_byte_size.data_type())?;
         Ok(TableStatistics {
             num_rows: input_stat.num_rows,
             column_statistics,

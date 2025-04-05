@@ -938,9 +938,10 @@ impl ExecutionPlan for AggregateExec {
         match self.mode {
             AggregateMode::Final | AggregateMode::FinalPartitioned
                 if self.group_by.expr.is_empty() =>
-            {
-                let num_rows = ProbabilityDistribution::new_uniform(Interval::make(Some(1), Some(1))?)?;
-                let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+            {   
+                let one = ScalarValue::new_one(&self.input().statistics()?.num_rows.data_type()).unwrap();
+                let num_rows = ProbabilityDistribution::new_exact(one)?;
+                let total_byte_size = ProbabilityDistribution::new_unknown(&self.input().statistics()?.total_byte_size.data_type())?;
                 Ok(TableStatistics {
                     num_rows,
                     column_statistics,
@@ -950,19 +951,19 @@ impl ExecutionPlan for AggregateExec {
             _ => {
                 // When the input row count is 0 or 1, we can adopt that statistic keeping its reliability.
                 // When it is larger than 1, we degrade the precision since it may decrease after aggregation.
-                let scalar_null = ScalarValue::try_new_null(&DataType::UInt64)?;
+                let scalar_null = ScalarValue::try_new_null(&self.input().statistics()?.num_rows.data_type())?;
                 let num_rows = self.input().statistics()?.num_rows;
-                let num_rows = if num_rows.get_value().unwrap_or(&scalar_null) > &ScalarValue::new_one(&DataType::UInt64)? {
+                let num_rows = if num_rows.get_value().unwrap_or(&scalar_null) > &ScalarValue::new_one(&self.input().statistics()?.num_rows.data_type())? {
                     self.input().statistics()?.num_rows.to_inexact()?
-                } else if num_rows.get_value().unwrap_or(&scalar_null) == &ScalarValue::new_zero(&DataType::UInt64)? {
+                } else if num_rows.get_value().unwrap_or(&scalar_null) == &ScalarValue::new_zero(&self.input().statistics()?.num_rows.data_type())? {
                     let n_rows = self.input().statistics()?.num_rows;
-                    let to_add = ProbabilityDistribution::new_exact(ScalarValue::new_one(&DataType::UInt64)?)?;
+                    let to_add = ProbabilityDistribution::new_exact(ScalarValue::new_one(&n_rows.data_type())?)?;
                     self.input().statistics()?.num_rows = new_generic_from_binary_op(&Operator::Plus, &n_rows, &to_add)?;
                     self.input().statistics()?.num_rows
                 } else {
                     self.input().statistics()?.num_rows
                 };
-                let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+                let total_byte_size = ProbabilityDistribution::new_unknown(&self.input().statistics()?.total_byte_size.data_type())?;
                 Ok(TableStatistics {
                     num_rows,
                     column_statistics,

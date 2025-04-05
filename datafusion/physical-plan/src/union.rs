@@ -633,7 +633,7 @@ fn col_stats_union(
     mut left: ColumnStatistics,
     right: ColumnStatistics,
 ) -> ColumnStatistics {
-    left.distinct_count = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
+    left.distinct_count = ProbabilityDistribution::new_unknown(&left.distinct_count.data_type()).unwrap_or_default();
     left.min_value = left.min_value.min(&right.min_value);
     left.max_value = left.max_value.max(&right.max_value);
     left.sum_value = new_generic_from_binary_op(&Operator::Plus, &left.sum_value, &right.sum_value).unwrap_or_default();

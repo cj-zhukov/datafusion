@@ -425,7 +425,7 @@ fn stats_cartesian_product(
                         let row_count = ProbabilityDistribution::new_exact(row_count.clone()).unwrap_or_default();
                         new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, &row_count).unwrap_or_default()
                     })
-                    .unwrap_or(ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default()),
+                    .unwrap_or(ProbabilityDistribution::new_unknown(&s.sum_value.data_type()).unwrap_or_default()),
             }
         })
         .chain(right_col_stats.into_iter().map(|s| {
@@ -443,7 +443,7 @@ fn stats_cartesian_product(
                         let row_count = ProbabilityDistribution::new_exact(row_count.clone()).unwrap_or_default();
                         new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, &row_count).unwrap_or_default()
                     })
-                    .unwrap_or(ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default()),
+                    .unwrap_or(ProbabilityDistribution::new_unknown(&s.sum_value.data_type()).unwrap_or_default()),
             }
         }))
         .collect();
