@@ -955,7 +955,7 @@ fn estimate_disjoint_inputs(
         let right_max_val = right_stat.max_value.get_value().unwrap_or(&null);
         if left_min_val > right_max_val {
             return Some(
-                ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default()
+                ProbabilityDistribution::new_zero(&left_min_val.data_type()).unwrap_or_default()
             );
         }
 
@@ -964,7 +964,7 @@ fn estimate_disjoint_inputs(
         if left_max_val < right_min_val
         {
             return Some(
-                ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default()
+                ProbabilityDistribution::new_zero(&left_max_val.data_type()).unwrap_or_default()
             );
         }
     }

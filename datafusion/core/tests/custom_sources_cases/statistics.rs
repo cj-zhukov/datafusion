@@ -115,7 +115,7 @@ impl TableProvider for StatisticsValidation {
             .iter()
             .map(|i| current_stat.column_statistics[*i].clone())
             .collect::<Vec<ColumnStatistics>>();
-        let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
+        let total_byte_size = ProbabilityDistribution::new_unknown(&current_stat.total_byte_size.data_type())?;
         Ok(Arc::new(Self::new(
             TableStatistics {
                 num_rows: current_stat.num_rows,

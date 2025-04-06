@@ -756,7 +756,6 @@ pub fn statistics_from_parquet_meta_calc(
                     }
                     Err(e) => {
                         debug!("Failed to create statistics converter: {}", e);
-                        // null_counts_array[idx] = Precision::Exact(num_rows);
                         let value = ScalarValue::UInt64(Some(num_rows as u64));
                         null_counts_array[idx] = ProbabilityDistribution::new_exact(value).unwrap();
                     }

@@ -1807,41 +1807,41 @@ mod tests {
         Ok(())
     }
 
-    // #[tokio::test]
-    // async fn test_insert_into_append_new_json_files() -> Result<()> {
-    //     let mut config_map: HashMap<String, String> = HashMap::new();
-    //     config_map.insert("datafusion.execution.batch_size".into(), "10".into());
-    //     config_map.insert(
-    //         "datafusion.execution.soft_max_rows_per_output_file".into(),
-    //         "10".into(),
-    //     );
-    //     helper_test_append_new_files_to_table(
-    //         JsonFormat::default().get_ext(),
-    //         FileCompressionType::UNCOMPRESSED,
-    //         Some(config_map),
-    //         2,
-    //     )
-    //     .await?;
-    //     Ok(())
-    // }
+    #[tokio::test]
+    async fn test_insert_into_append_new_json_files() -> Result<()> {
+        let mut config_map: HashMap<String, String> = HashMap::new();
+        config_map.insert("datafusion.execution.batch_size".into(), "10".into());
+        config_map.insert(
+            "datafusion.execution.soft_max_rows_per_output_file".into(),
+            "10".into(),
+        );
+        helper_test_append_new_files_to_table(
+            JsonFormat::default().get_ext(),
+            FileCompressionType::UNCOMPRESSED,
+            Some(config_map),
+            2,
+        )
+        .await?;
+        Ok(())
+    }
 
-    // #[tokio::test]
-    // async fn test_insert_into_append_new_csv_files() -> Result<()> {
-    //     let mut config_map: HashMap<String, String> = HashMap::new();
-    //     config_map.insert("datafusion.execution.batch_size".into(), "10".into());
-    //     config_map.insert(
-    //         "datafusion.execution.soft_max_rows_per_output_file".into(),
-    //         "10".into(),
-    //     );
-    //     helper_test_append_new_files_to_table(
-    //         CsvFormat::default().get_ext(),
-    //         FileCompressionType::UNCOMPRESSED,
-    //         Some(config_map),
-    //         2,
-    //     )
-    //     .await?;
-    //     Ok(())
-    // }
+    #[tokio::test]
+    async fn test_insert_into_append_new_csv_files() -> Result<()> {
+        let mut config_map: HashMap<String, String> = HashMap::new();
+        config_map.insert("datafusion.execution.batch_size".into(), "10".into());
+        config_map.insert(
+            "datafusion.execution.soft_max_rows_per_output_file".into(),
+            "10".into(),
+        );
+        helper_test_append_new_files_to_table(
+            CsvFormat::default().get_ext(),
+            FileCompressionType::UNCOMPRESSED,
+            Some(config_map),
+            2,
+        )
+        .await?;
+        Ok(())
+    }
 
     #[cfg(feature = "parquet")]
     #[tokio::test]
