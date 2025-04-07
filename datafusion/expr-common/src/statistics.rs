@@ -100,7 +100,7 @@ impl ProbabilityDistribution {
             scalar_null.clone(),
             scalar_null.clone(),
             scalar_null,
-            Interval::make_non_negative_infinity_interval(data_type)?,
+            Interval::make_unbounded(data_type)?,
         )
     }
 
@@ -231,7 +231,7 @@ impl ProbabilityDistribution {
 
 impl Default for ProbabilityDistribution {
     fn default() -> Self {
-        Self::new_unknown(&DataType::UInt64).expect("Failed creating default unknown `Generic` Distribution.")
+        Self::new_unknown(&DataType::Null).expect("Failed creating default unknown `Generic` Distribution.")
     }
 }
 
