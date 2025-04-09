@@ -39,8 +39,7 @@ use datafusion_expr::interval_arithmetic::{apply_operator, Interval};
 use datafusion_expr::sort_properties::ExprProperties;
 use datafusion_expr::statistics::ProbabilityDistribution::{Bernoulli, Gaussian};
 use datafusion_expr::statistics::{
-    combine_bernoullis, combine_gaussians, create_bernoulli_from_comparison,
-    new_generic_from_binary_op, ProbabilityDistribution,
+    combine_bernoullis, combine_gaussians, create_bernoulli_from_comparison, ProbabilityDistribution,
 };
 use datafusion_expr::{ColumnarValue, Operator};
 use datafusion_physical_expr_common::datum::{apply, apply_cmp, apply_cmp_for_nested};
@@ -519,7 +518,7 @@ impl PhysicalExpr for BinaryExpr {
             return create_bernoulli_from_comparison(&self.op, left, right);
         }
         // Fall back to an unknown distribution with only summary statistics:
-        new_generic_from_binary_op(&self.op, left, right)
+        ProbabilityDistribution::combine_distributions(&self.op, left, right)
     }
 
     /// For each operator, [`BinaryExpr`] has distinct rules.
@@ -4491,7 +4490,7 @@ mod tests {
                 let expr = binary_expr(Arc::clone(&a), op, Arc::clone(&b), schema)?;
                 assert_eq!(
                     expr.evaluate_statistics(&children)?,
-                    new_generic_from_binary_op(&op, children[0], children[1])?
+                    ProbabilityDistribution::combine_distributions(&op, children[0], children[1])?
                 );
             }
         }

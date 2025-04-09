@@ -730,7 +730,7 @@ pub fn statistics_from_parquet_meta_calc(
     statistics.column_statistics = if has_statistics {
         let (mut max_accs, mut min_accs) = create_max_min_accs(&table_schema);
         let mut null_counts_array = 
-            vec![ProbabilityDistribution::new_zero(&DataType::UInt64)?; table_schema.fields().len()];
+            vec![ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(0)))?; table_schema.fields().len()];
 
         table_schema
             .fields()
@@ -757,7 +757,7 @@ pub fn statistics_from_parquet_meta_calc(
                     Err(e) => {
                         debug!("Failed to create statistics converter: {}", e);
                         let value = ScalarValue::UInt64(Some(num_rows as u64));
-                        null_counts_array[idx] = ProbabilityDistribution::new_exact(value).unwrap();
+                        null_counts_array[idx] = ProbabilityDistribution::new_exact(value).unwrap_or_default();
                     }
                 }
             });

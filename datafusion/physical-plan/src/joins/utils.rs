@@ -48,7 +48,7 @@ use datafusion_common::{
     plan_err, DataFusionError, JoinSide, JoinType, Result, ScalarValue, SharedResult
 };
 use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::add_offset_to_expr;
 use datafusion_physical_expr::expressions::Column;
@@ -805,8 +805,9 @@ fn estimate_join_cardinality(
                 JoinType::Full => {
                     let left_max = ij_cardinality.max(&left_stats.num_rows);
                     let right_max = ij_cardinality.max(&right_stats.num_rows);
-                    let to_add = new_generic_from_binary_op(&Operator::Plus, &left_max, &right_max).unwrap_or_default();
-                    new_generic_from_binary_op(&Operator::Minus, &to_add, &ij_cardinality).unwrap_or_default()
+                    let to_add = 
+                        ProbabilityDistribution::combine_distributions(&Operator::Plus, &left_max, &right_max).unwrap_or_default();
+                    ProbabilityDistribution::combine_distributions(&Operator::Minus, &to_add, &ij_cardinality).unwrap_or_default()
                 }
                 _ => unreachable!(),
             };
@@ -916,8 +917,9 @@ fn estimate_inner_join_cardinality(
     let scalar_null = ScalarValue::try_new_null(&join_selectivity.data_type()).unwrap();
     let value = join_selectivity.get_value().unwrap_or(&scalar_null);
     if value > &ScalarValue::new_one(&join_selectivity.data_type()).unwrap() {
-        let res = new_generic_from_binary_op(&Operator::Multiply, &left_stats.num_rows, &right_stats.num_rows).unwrap_or_default();
-        Some(new_generic_from_binary_op(&Operator::Divide, &res, &join_selectivity).unwrap_or_default())
+        let res = 
+            ProbabilityDistribution::combine_distributions(&Operator::Multiply, &left_stats.num_rows, &right_stats.num_rows).unwrap_or_default();
+        Some(ProbabilityDistribution::combine_distributions(&Operator::Divide, &res, &join_selectivity).unwrap_or_default())
     } else {
         None
     }

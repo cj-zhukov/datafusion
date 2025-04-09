@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use arrow_schema::DataType;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use futures::{Stream, StreamExt};
 use datafusion_common::ScalarValue;
@@ -90,10 +90,11 @@ pub async fn get_statistics_with_limit(
                 // counts across all the files in question. If any file does not
                 // provide any information or provides an inexact value, we demote
                 // the statistic precision to inexact.
-                num_rows = new_generic_from_binary_op(&Operator::Plus, &file_stats.num_rows, &num_rows)?;
+                num_rows = 
+                    ProbabilityDistribution::combine_distributions(&Operator::Plus, &file_stats.num_rows, &num_rows)?;
 
                 total_byte_size =
-                    new_generic_from_binary_op(&Operator::Plus, &file_stats.total_byte_size, &total_byte_size)?;
+                    ProbabilityDistribution::combine_distributions(&Operator::Plus, &file_stats.total_byte_size, &total_byte_size)?;
 
                 for (file_col_stats, col_stats) in file_stats
                     .column_statistics
@@ -108,10 +109,12 @@ pub async fn get_statistics_with_limit(
                         distinct_count: _,
                     } = file_col_stats;
 
-                    col_stats.null_count = new_generic_from_binary_op(&Operator::Plus, &file_nc, &col_stats.null_count)?;
+                    col_stats.null_count = 
+                        ProbabilityDistribution::combine_distributions(&Operator::Plus, &file_nc, &col_stats.null_count)?;
                     set_max_if_greater(file_max, &mut col_stats.max_value);
                     set_min_if_lesser(file_min, &mut col_stats.min_value);
-                    col_stats.sum_value = new_generic_from_binary_op(&Operator::Plus, file_sum, &col_stats.sum_value)?;
+                    col_stats.sum_value = 
+                        ProbabilityDistribution::combine_distributions(&Operator::Plus, file_sum, &col_stats.sum_value)?;
                 }
 
                 // If the number of rows exceeds the limit, we can stop processing

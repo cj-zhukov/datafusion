@@ -41,10 +41,9 @@ use crate::stream::ObservedStream;
 
 use arrow::datatypes::{Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use arrow_schema::DataType;
 use datafusion_common::{exec_err, internal_err, DataFusionError, Result};
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::{calculate_union, EquivalenceProperties};
 
@@ -636,14 +635,14 @@ fn col_stats_union(
     left.distinct_count = ProbabilityDistribution::new_unknown(&left.distinct_count.data_type()).unwrap_or_default();
     left.min_value = left.min_value.min(&right.min_value);
     left.max_value = left.max_value.max(&right.max_value);
-    left.sum_value = new_generic_from_binary_op(&Operator::Plus, &left.sum_value, &right.sum_value).unwrap_or_default();
-    left.null_count = new_generic_from_binary_op(&Operator::Plus, &left.null_count, &right.null_count).unwrap_or_default();
+    left.sum_value = ProbabilityDistribution::combine_distributions(&Operator::Plus, &left.sum_value, &right.sum_value).unwrap_or_default();
+    left.null_count = ProbabilityDistribution::combine_distributions(&Operator::Plus, &left.null_count, &right.null_count).unwrap_or_default();
     left
 }
 
 fn stats_union(mut left: TableStatistics, right: TableStatistics) -> TableStatistics {
-    left.num_rows = new_generic_from_binary_op(&Operator::Plus, &left.num_rows, &right.num_rows).unwrap_or_default();
-    left.total_byte_size = new_generic_from_binary_op(&Operator::Plus, &left.total_byte_size, &right.total_byte_size).unwrap_or_default();
+    left.num_rows = ProbabilityDistribution::combine_distributions(&Operator::Plus, &left.num_rows, &right.num_rows).unwrap_or_default();
+    left.total_byte_size = ProbabilityDistribution::combine_distributions(&Operator::Plus, &left.total_byte_size, &right.total_byte_size).unwrap_or_default();
     left.column_statistics = left
         .column_statistics
         .into_iter()

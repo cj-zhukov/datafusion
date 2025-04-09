@@ -248,15 +248,9 @@ impl ProbabilityDistribution {
         }
     }
 
+    // #TODO delete
     pub fn to_inexact(self) -> Result<Self> {
-        let res = match self {
-            Uniform(dist) => ProbabilityDistribution::new_unknown(&dist.data_type())?,
-            Exponential(_dist) => todo!(),
-            Gaussian(_dist) => todo!(),
-            Bernoulli(_dist) => todo!(),
-            _ => self,
-        };
-        Ok(res)
+        Ok(self)
     }
 
     pub fn is_exact(&self) -> Option<bool> {
@@ -1016,6 +1010,51 @@ impl Display for ProbabilityDistribution {
             Gaussian(dist) => write!(f, "Gaussian({:?})", dist),
             Bernoulli(dist) => write!(f, "Bernoulli({:?})", dist),
             Generic(dist) => write!(f, "Generic({:?})", dist),
+        }
+    }
+}
+
+impl ProbabilityDistribution {
+    pub fn combine_distributions(    
+        op: &Operator,
+        left: &ProbabilityDistribution,
+        right: &ProbabilityDistribution,
+    ) -> Result<Self> {
+        match (left, right) {
+            (Generic(_), Generic(_)) => new_generic_from_binary_op(op, left, right),
+            (Bernoulli(l), Bernoulli(r)) => {
+                let combined = combine_bernoullis(op, l, r)?;
+                ProbabilityDistribution::new_bernoulli(combined.p_value().clone())
+            },
+            (Gaussian(l), Gaussian(r)) => {
+                let combined = combine_gaussians(op, l, r)?;
+                let scalar_null = ScalarValue::try_new_null(&left.data_type())?;
+                let mean = combined.as_ref().map(|v| v.mean()).unwrap_or(&scalar_null);
+                let median = combined.as_ref().map(|v| v.median()).unwrap_or(&scalar_null);
+                ProbabilityDistribution::new_gaussian(mean.clone(), median.clone())
+            },
+            (Uniform(l), Uniform(r)) => {
+                match op {
+                    Operator::Plus => {
+                        let combined = l.interval.add(r.interval.clone())?;
+                        ProbabilityDistribution::new_uniform(combined)
+                    },
+                    Operator::Minus => {
+                        let combined = l.interval.sub(r.interval.clone())?;
+                        ProbabilityDistribution::new_uniform(combined)
+                    },
+                    Operator::Multiply => {
+                        let combined = l.interval.mul(r.interval.clone())?;
+                        ProbabilityDistribution::new_uniform(combined)
+                    },
+                    Operator::Divide => {
+                        let combined = l.interval.div(r.interval.clone())?;
+                        ProbabilityDistribution::new_uniform(combined)
+                    },
+                    _ => unimplemented!()
+                }
+            },
+            _ => new_generic_from_binary_op(op, left, right),
         }
     }
 }

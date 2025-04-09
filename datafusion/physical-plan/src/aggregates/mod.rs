@@ -37,11 +37,9 @@ use crate::{
 use arrow::array::{ArrayRef, UInt16Array, UInt32Array, UInt64Array, UInt8Array};
 use arrow::datatypes::{Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use arrow_schema::DataType;
 use datafusion_common::{internal_err, not_impl_err, Constraint, Constraints, Result, ScalarValue};
 use datafusion_execution::TaskContext;
-use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ProbabilityDistribution, TableStatistics};
 use datafusion_expr::{Accumulator, Aggregate, Operator};
 use datafusion_physical_expr::aggregate::AggregateFunctionExpr;
 use datafusion_physical_expr::{
@@ -958,7 +956,7 @@ impl ExecutionPlan for AggregateExec {
                 } else if num_rows.get_value().unwrap_or(&scalar_null) == &ScalarValue::new_zero(&self.input().statistics()?.num_rows.data_type())? {
                     let n_rows = self.input().statistics()?.num_rows;
                     let to_add = ProbabilityDistribution::new_exact(ScalarValue::new_one(&n_rows.data_type())?)?;
-                    self.input().statistics()?.num_rows = new_generic_from_binary_op(&Operator::Plus, &n_rows, &to_add)?;
+                    self.input().statistics()?.num_rows = ProbabilityDistribution::combine_distributions(&Operator::Plus, &n_rows, &to_add)?;
                     self.input().statistics()?.num_rows
                 } else {
                     self.input().statistics()?.num_rows

@@ -41,11 +41,10 @@ use crate::{
 use arrow::array::{RecordBatch, RecordBatchOptions};
 use arrow::compute::concat_batches;
 use arrow::datatypes::{Fields, Schema, SchemaRef};
-use arrow_schema::DataType;
 use datafusion_common::{internal_err, JoinType, Result, ScalarValue};
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryReservation};
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::{new_generic_from_binary_op, ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::join_equivalence_properties;
 
@@ -397,11 +396,14 @@ fn stats_cartesian_product(
     let right_row_count = right_stats.num_rows;
 
     // calculate global stats
-    let num_rows = new_generic_from_binary_op(&Operator::Multiply, &left_row_count, &right_row_count)?;
+    let num_rows: ProbabilityDistribution = 
+        ProbabilityDistribution::combine_distributions(&Operator::Multiply, &left_row_count, &right_row_count)?;
     // the result size is two times a*b because you have the columns of both left and right
-    let total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &left_stats.total_byte_size, &right_stats.total_byte_size)?;
+    let total_byte_size = 
+        ProbabilityDistribution::combine_distributions(&Operator::Multiply, &left_stats.total_byte_size, &right_stats.total_byte_size)?;
     let right = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(2)))?;
-    let total_byte_size = new_generic_from_binary_op(&Operator::Multiply, &total_byte_size, &right)?;
+    let total_byte_size = 
+        ProbabilityDistribution::combine_distributions(&Operator::Multiply, &total_byte_size, &right)?;
 
     let left_col_stats = left_stats.column_statistics;
     let right_col_stats = right_stats.column_statistics;
@@ -411,7 +413,8 @@ fn stats_cartesian_product(
     let cross_join_stats = left_col_stats
         .into_iter()
         .map(|s| {
-            let null_count = new_generic_from_binary_op(&Operator::Multiply, &s.null_count, &right_row_count).unwrap_or_default();
+            let null_count = 
+                ProbabilityDistribution::combine_distributions(&Operator::Multiply, &s.null_count, &right_row_count).unwrap_or_default();
 
             ColumnStatistics {
                 null_count,
@@ -423,13 +426,14 @@ fn stats_cartesian_product(
                     .get_value()
                     .map(|row_count| {
                         let row_count = ProbabilityDistribution::new_exact(row_count.clone()).unwrap_or_default();
-                        new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, &row_count).unwrap_or_default()
+                        ProbabilityDistribution::combine_distributions(&Operator::Multiply, &s.sum_value, &row_count).unwrap_or_default()
                     })
                     .unwrap_or(ProbabilityDistribution::new_unknown(&s.sum_value.data_type()).unwrap_or_default()),
             }
         })
         .chain(right_col_stats.into_iter().map(|s| {
-            let null_count = new_generic_from_binary_op(&Operator::Multiply, &s.null_count, &left_row_count).unwrap_or_default();
+            let null_count = 
+                ProbabilityDistribution::combine_distributions(&Operator::Multiply, &s.null_count, &left_row_count).unwrap_or_default();
             
             ColumnStatistics {
                 null_count,
@@ -441,7 +445,7 @@ fn stats_cartesian_product(
                     .get_value()
                     .map(|row_count| {
                         let row_count = ProbabilityDistribution::new_exact(row_count.clone()).unwrap_or_default();
-                        new_generic_from_binary_op(&Operator::Multiply, &s.sum_value, &row_count).unwrap_or_default()
+                        ProbabilityDistribution::combine_distributions(&Operator::Multiply, &s.sum_value, &row_count).unwrap_or_default()
                     })
                     .unwrap_or(ProbabilityDistribution::new_unknown(&s.sum_value.data_type()).unwrap_or_default()),
             }

@@ -18,7 +18,7 @@
 //! Logical plans need to provide stable semantics, as downstream projects
 //! create them and depend on them. Test executable semantics of logical plans.
 
-use arrow::array::Int64Array;
+use arrow::array::{Int64Array, UInt64Array};
 use arrow::datatypes::{DataType, Field};
 use datafusion::execution::session_state::SessionStateBuilder;
 use datafusion_common::{Column, DFSchema, Result, ScalarValue, Spans};
@@ -81,8 +81,8 @@ async fn count_only_nulls() -> Result<()> {
     let field = only(result_schema.fields().deref());
     let column = only(result.columns());
 
-    assert_eq!(field.data_type(), &DataType::Int64); // TODO should be UInt64
-    assert_eq!(column.deref(), &Int64Array::from(vec![0]));
+    assert_eq!(field.data_type(), &DataType::UInt64); // TODO should be UInt64
+    assert_eq!(column.deref(), &UInt64Array::from(vec![0]));
 
     Ok(())
 }
