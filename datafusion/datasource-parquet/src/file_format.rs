@@ -39,10 +39,11 @@ use arrow::datatypes::{DataType, Field, FieldRef};
 use datafusion_catalog::Session;
 use datafusion_common::config::{ConfigField, ConfigFileType, TableParquetOptions};
 use datafusion_common::parsers::CompressionTypeVariant;
-use datafusion_common::{
-    internal_datafusion_err, internal_err, not_impl_err, DataFusionError, GetExt, Result, ScalarValue, DEFAULT_PARQUET_EXTENSION
-};
 use datafusion_common::HashMap;
+use datafusion_common::{
+    internal_datafusion_err, internal_err, not_impl_err, DataFusionError, GetExt, Result,
+    ScalarValue, DEFAULT_PARQUET_EXTENSION,
+};
 use datafusion_common_runtime::SpawnedTask;
 use datafusion_datasource::display::FileGroupDisplay;
 use datafusion_datasource::file::FileSource;
@@ -50,7 +51,9 @@ use datafusion_datasource::file_scan_config::FileScanConfig;
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryPool, MemoryReservation};
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
 use datafusion_expr::dml::InsertOp;
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use datafusion_expr::Expr;
 use datafusion_functions_aggregate::min_max::{MaxAccumulator, MinAccumulator};
 use datafusion_physical_expr::PhysicalExpr;
@@ -729,8 +732,11 @@ pub fn statistics_from_parquet_meta_calc(
 
     statistics.column_statistics = if has_statistics {
         let (mut max_accs, mut min_accs) = create_max_min_accs(&table_schema);
-        let mut null_counts_array = 
-            vec![ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(0)))?; table_schema.fields().len()];
+        let mut null_counts_array =
+            vec![
+                ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(0)))?;
+                table_schema.fields().len()
+            ];
 
         table_schema
             .fields()
@@ -757,7 +763,8 @@ pub fn statistics_from_parquet_meta_calc(
                     Err(e) => {
                         debug!("Failed to create statistics converter: {}", e);
                         let value = ScalarValue::UInt64(Some(num_rows as u64));
-                        null_counts_array[idx] = ProbabilityDistribution::new_exact(value).unwrap_or_default();
+                        null_counts_array[idx] =
+                            ProbabilityDistribution::new_exact(value).unwrap_or_default();
                     }
                 }
             });
@@ -792,14 +799,21 @@ fn get_col_stats(
                 None => None,
             };
             let max_value = match max_value {
-                None => ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
-                Some(value) => ProbabilityDistribution::new_exact(value).unwrap_or_default()
+                None => ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default(),
+                Some(value) => {
+                    ProbabilityDistribution::new_exact(value).unwrap_or_default()
+                }
             };
             let min_value = match min_value {
-                None => ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
-                Some(value) => ProbabilityDistribution::new_exact(value).unwrap_or_default()
+                None => ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default(),
+                Some(value) => {
+                    ProbabilityDistribution::new_exact(value).unwrap_or_default()
+                }
             };
-            let sum_value = ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default();
+            let sum_value = ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                .unwrap_or_default();
             let distinct_count = sum_value.clone();
             ColumnStatistics {
                 null_count: null_counts[i].clone(),
@@ -837,7 +851,8 @@ fn summarize_min_max_null_counts(
         Some(v) => v,
         None => num_rows as u64,
     };
-    null_counts_array[arrow_schema_index] = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(nulls)))?;
+    null_counts_array[arrow_schema_index] =
+        ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(nulls)))?;
 
     Ok(())
 }

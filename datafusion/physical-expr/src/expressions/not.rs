@@ -128,7 +128,10 @@ impl PhysicalExpr for NotExpr {
             .map(|result| vec![result]))
     }
 
-    fn evaluate_statistics(&self, children: &[&ProbabilityDistribution]) -> Result<ProbabilityDistribution> {
+    fn evaluate_statistics(
+        &self,
+        children: &[&ProbabilityDistribution],
+    ) -> Result<ProbabilityDistribution> {
         match children[0] {
             Bernoulli(b) => {
                 let p_value = b.p_value();
@@ -155,17 +158,17 @@ impl PhysicalExpr for NotExpr {
                     if child.range() == Interval::CERTAINLY_TRUE {
                         None
                     } else {
-                        Some(vec![ProbabilityDistribution::new_bernoulli(ScalarValue::new_zero(
-                            &child.data_type(),
-                        )?)?])
+                        Some(vec![ProbabilityDistribution::new_bernoulli(
+                            ScalarValue::new_zero(&child.data_type())?,
+                        )?])
                     }
                 } else if parent_range == Interval::CERTAINLY_FALSE {
                     if child.range() == Interval::CERTAINLY_FALSE {
                         None
                     } else {
-                        Some(vec![ProbabilityDistribution::new_bernoulli(ScalarValue::new_one(
-                            &child.data_type(),
-                        )?)?])
+                        Some(vec![ProbabilityDistribution::new_bernoulli(
+                            ScalarValue::new_one(&child.data_type())?,
+                        )?])
                     }
                 } else {
                     Some(vec![])

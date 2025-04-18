@@ -33,7 +33,9 @@ use datafusion_common::{plan_err, DataFusionError, Result};
 use datafusion_execution::memory_pool::MemoryReservation;
 
 use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use futures::{StreamExt, TryStreamExt};
 use parking_lot::Mutex;
 
@@ -168,13 +170,22 @@ pub fn compute_record_batch_statistics(
         .into_iter()
         .map(|null_count| {
             let mut s = ColumnStatistics::new_unknown().unwrap_or_default();
-            s.null_count = ProbabilityDistribution::new_uniform(Interval::make(Some(null_count as u64), Some(null_count as u64)).unwrap()).unwrap();
+            s.null_count = ProbabilityDistribution::new_uniform(
+                Interval::make(Some(null_count as u64), Some(null_count as u64)).unwrap(),
+            )
+            .unwrap();
             s
         })
         .collect();
 
-    let num_rows = ProbabilityDistribution::new_uniform(Interval::make(Some(nb_rows as u64), Some(nb_rows as u64))?)?;
-    let total_byte_size = ProbabilityDistribution::new_uniform(Interval::make(Some(total_byte_size as u64), Some(total_byte_size as u64))?)?;
+    let num_rows = ProbabilityDistribution::new_uniform(Interval::make(
+        Some(nb_rows as u64),
+        Some(nb_rows as u64),
+    )?)?;
+    let total_byte_size = ProbabilityDistribution::new_uniform(Interval::make(
+        Some(total_byte_size as u64),
+        Some(total_byte_size as u64),
+    )?)?;
     Ok(TableStatistics {
         num_rows,
         total_byte_size,
@@ -297,8 +308,14 @@ mod tests {
         ]));
         let stats = compute_record_batch_statistics(&[], &schema, Some(vec![0, 1]))?;
 
-        assert_eq!(stats.num_rows, ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(0))?)?);
-        assert_eq!(stats.total_byte_size, ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(0))?)?);
+        assert_eq!(
+            stats.num_rows,
+            ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(0))?)?
+        );
+        assert_eq!(
+            stats.total_byte_size,
+            ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(0))?)?
+        );
         Ok(())
     }
 
@@ -330,21 +347,31 @@ mod tests {
 
         let expected = TableStatistics {
             num_rows: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(3)))?,
-            total_byte_size: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(byte_size as u64)))?,
+            total_byte_size: ProbabilityDistribution::new_exact(ScalarValue::UInt64(
+                Some(byte_size as u64),
+            ))?,
             column_statistics: vec![
                 ColumnStatistics {
-                    distinct_count: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    max_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    min_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    sum_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(0)))?,
+                    distinct_count: ProbabilityDistribution::new_unknown(
+                        &DataType::UInt64,
+                    )?,
+                    max_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
+                    min_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
+                    sum_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
+                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(
+                        Some(0),
+                    ))?,
                 },
                 ColumnStatistics {
-                    distinct_count: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    max_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    min_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    sum_value:  ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(0)))?,
+                    distinct_count: ProbabilityDistribution::new_unknown(
+                        &DataType::UInt64,
+                    )?,
+                    max_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
+                    min_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
+                    sum_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
+                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(
+                        Some(0),
+                    ))?,
                 },
             ],
         };
@@ -366,18 +393,30 @@ mod tests {
             vec![Arc::new(UInt64Array::from(vec![Some(1), Some(2), None]))],
         )?;
         let byte_size = batch1.get_array_memory_size() + batch2.get_array_memory_size();
-        let actual =
-            compute_record_batch_statistics(&[vec![batch1], vec![batch2]], &schema, None)?;
+        let actual = compute_record_batch_statistics(
+            &[vec![batch1], vec![batch2]],
+            &schema,
+            None,
+        )?;
 
         let expected = TableStatistics {
-            num_rows: ProbabilityDistribution::new_uniform(Interval::make(Some(6), Some(6))?)?,
-            total_byte_size: ProbabilityDistribution::new_uniform(Interval::make(Some(byte_size as u64), Some(byte_size as u64))?)?,
+            num_rows: ProbabilityDistribution::new_uniform(Interval::make(
+                Some(6),
+                Some(6),
+            )?)?,
+            total_byte_size: ProbabilityDistribution::new_uniform(Interval::make(
+                Some(byte_size as u64),
+                Some(byte_size as u64),
+            )?)?,
             column_statistics: vec![ColumnStatistics {
                 distinct_count: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                 max_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                 min_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
                 sum_value: ProbabilityDistribution::new_unknown(&DataType::UInt64)?,
-                null_count: ProbabilityDistribution::new_uniform(Interval::make(Some(3), Some(3))?)?,
+                null_count: ProbabilityDistribution::new_uniform(Interval::make(
+                    Some(3),
+                    Some(3),
+                )?)?,
             }],
         };
 

@@ -26,15 +26,17 @@ use datafusion::{
     error::Result,
     logical_expr::Expr,
     physical_plan::{
-        DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning,
-        PlanProperties, SendableRecordBatchStream,
+        DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties,
+        SendableRecordBatchStream,
     },
     prelude::SessionContext,
     scalar::ScalarValue,
 };
 use datafusion_catalog::Session;
 use datafusion_common::project_schema;
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use datafusion_physical_expr::EquivalenceProperties;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
 
@@ -115,7 +117,9 @@ impl TableProvider for StatisticsValidation {
             .iter()
             .map(|i| current_stat.column_statistics[*i].clone())
             .collect::<Vec<ColumnStatistics>>();
-        let total_byte_size = ProbabilityDistribution::new_unknown(&current_stat.total_byte_size.data_type())?;
+        let total_byte_size = ProbabilityDistribution::new_unknown(
+            &current_stat.total_byte_size.data_type(),
+        )?;
         Ok(Arc::new(Self::new(
             TableStatistics {
                 num_rows: current_stat.num_rows,
@@ -199,22 +203,52 @@ fn init_ctx(stats: TableStatistics, schema: Schema) -> Result<SessionContext> {
 fn fully_defined() -> (TableStatistics, Schema) {
     (
         TableStatistics {
-            num_rows: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(13))).unwrap_or_default(),
-            total_byte_size: ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+            num_rows: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(13)))
+                .unwrap_or_default(),
+            total_byte_size: ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                .unwrap_or_default(),
             column_statistics: vec![
-                ColumnStatistics { 
-                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(2))).unwrap_or_default(), 
-                    max_value: ProbabilityDistribution::new_exact(ScalarValue::Int32(Some(1023))).unwrap_or_default(), 
-                    min_value: ProbabilityDistribution::new_exact(ScalarValue::Int32(Some(-24))).unwrap_or_default(), 
-                    sum_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(Some(10))).unwrap_or_default(), 
-                    distinct_count: ProbabilityDistribution::new_zero(&DataType::UInt64).unwrap_or_default(), 
+                ColumnStatistics {
+                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(
+                        Some(2),
+                    ))
+                    .unwrap_or_default(),
+                    max_value: ProbabilityDistribution::new_exact(ScalarValue::Int32(
+                        Some(1023),
+                    ))
+                    .unwrap_or_default(),
+                    min_value: ProbabilityDistribution::new_exact(ScalarValue::Int32(
+                        Some(-24),
+                    ))
+                    .unwrap_or_default(),
+                    sum_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(
+                        Some(10),
+                    ))
+                    .unwrap_or_default(),
+                    distinct_count: ProbabilityDistribution::new_zero(&DataType::UInt64)
+                        .unwrap_or_default(),
                 },
-                ColumnStatistics { 
-                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(13))).unwrap_or_default(), 
-                    max_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(Some(5486))).unwrap_or_default(), 
-                    min_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(Some(-6783))).unwrap_or_default(), 
-                    sum_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(Some(10))).unwrap_or_default(), 
-                    distinct_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(5))).unwrap_or_default(), 
+                ColumnStatistics {
+                    null_count: ProbabilityDistribution::new_exact(ScalarValue::UInt64(
+                        Some(13),
+                    ))
+                    .unwrap_or_default(),
+                    max_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(
+                        Some(5486),
+                    ))
+                    .unwrap_or_default(),
+                    min_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(
+                        Some(-6783),
+                    ))
+                    .unwrap_or_default(),
+                    sum_value: ProbabilityDistribution::new_exact(ScalarValue::Int64(
+                        Some(10),
+                    ))
+                    .unwrap_or_default(),
+                    distinct_count: ProbabilityDistribution::new_exact(
+                        ScalarValue::UInt64(Some(5)),
+                    )
+                    .unwrap_or_default(),
                 },
             ],
         },

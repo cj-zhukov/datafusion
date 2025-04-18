@@ -37,7 +37,9 @@ use crate::{
 use arrow::array::{ArrayRef, UInt16Array, UInt32Array, UInt64Array, UInt8Array};
 use arrow::datatypes::{Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use datafusion_common::{internal_err, not_impl_err, Constraint, Constraints, Result, ScalarValue};
+use datafusion_common::{
+    internal_err, not_impl_err, Constraint, Constraints, Result, ScalarValue,
+};
 use datafusion_execution::TaskContext;
 use datafusion_expr::statistics::{ProbabilityDistribution, TableStatistics};
 use datafusion_expr::{Accumulator, Aggregate, Operator};
@@ -936,10 +938,15 @@ impl ExecutionPlan for AggregateExec {
         match self.mode {
             AggregateMode::Final | AggregateMode::FinalPartitioned
                 if self.group_by.expr.is_empty() =>
-            {   
-                let one = ScalarValue::new_one(&self.input().statistics()?.num_rows.data_type()).unwrap();
+            {
+                let one = ScalarValue::new_one(
+                    &self.input().statistics()?.num_rows.data_type(),
+                )
+                .unwrap();
                 let num_rows = ProbabilityDistribution::new_exact(one)?;
-                let total_byte_size = ProbabilityDistribution::new_unknown(&self.input().statistics()?.total_byte_size.data_type())?;
+                let total_byte_size = ProbabilityDistribution::new_unknown(
+                    &self.input().statistics()?.total_byte_size.data_type(),
+                )?;
                 Ok(TableStatistics {
                     num_rows,
                     column_statistics,
@@ -949,19 +956,37 @@ impl ExecutionPlan for AggregateExec {
             _ => {
                 // When the input row count is 0 or 1, we can adopt that statistic keeping its reliability.
                 // When it is larger than 1, we degrade the precision since it may decrease after aggregation.
-                let scalar_null = ScalarValue::try_new_null(&self.input().statistics()?.num_rows.data_type())?;
+                let scalar_null = ScalarValue::try_new_null(
+                    &self.input().statistics()?.num_rows.data_type(),
+                )?;
                 let num_rows = self.input().statistics()?.num_rows;
-                let num_rows = if num_rows.get_value().unwrap_or(&scalar_null) > &ScalarValue::new_one(&self.input().statistics()?.num_rows.data_type())? {
+                let num_rows = if num_rows.get_value().unwrap_or(&scalar_null)
+                    > &ScalarValue::new_one(
+                        &self.input().statistics()?.num_rows.data_type(),
+                    )? {
                     self.input().statistics()?.num_rows.to_inexact()?
-                } else if num_rows.get_value().unwrap_or(&scalar_null) == &ScalarValue::new_zero(&self.input().statistics()?.num_rows.data_type())? {
+                } else if num_rows.get_value().unwrap_or(&scalar_null)
+                    == &ScalarValue::new_zero(
+                        &self.input().statistics()?.num_rows.data_type(),
+                    )?
+                {
                     let n_rows = self.input().statistics()?.num_rows;
-                    let to_add = ProbabilityDistribution::new_exact(ScalarValue::new_one(&n_rows.data_type())?)?;
-                    self.input().statistics()?.num_rows = ProbabilityDistribution::combine_distributions(&Operator::Plus, &n_rows, &to_add)?;
+                    let to_add = ProbabilityDistribution::new_exact(
+                        ScalarValue::new_one(&n_rows.data_type())?,
+                    )?;
+                    self.input().statistics()?.num_rows =
+                        ProbabilityDistribution::combine_distributions(
+                            &Operator::Plus,
+                            &n_rows,
+                            &to_add,
+                        )?;
                     self.input().statistics()?.num_rows
                 } else {
                     self.input().statistics()?.num_rows
                 };
-                let total_byte_size = ProbabilityDistribution::new_unknown(&self.input().statistics()?.total_byte_size.data_type())?;
+                let total_byte_size = ProbabilityDistribution::new_unknown(
+                    &self.input().statistics()?.total_byte_size.data_type(),
+                )?;
                 Ok(TableStatistics {
                     num_rows,
                     column_statistics,
@@ -1895,11 +1920,7 @@ mod tests {
 
         fn statistics(&self) -> Result<TableStatistics> {
             let (_, batches) = some_data();
-            common::compute_record_batch_statistics(
-                &[batches],
-                &self.schema(),
-                None,
-            )
+            common::compute_record_batch_statistics(&[batches], &self.schema(), None)
         }
     }
 

@@ -30,8 +30,7 @@ use datafusion_catalog::Session;
 use datafusion_common::config::{ConfigField, ConfigFileType, CsvOptions};
 use datafusion_common::file_options::csv_writer::CsvWriterOptions;
 use datafusion_common::{
-    exec_err, not_impl_err, DataFusionError, GetExt, Result,
-    DEFAULT_CSV_EXTENSION,
+    exec_err, not_impl_err, DataFusionError, GetExt, Result, DEFAULT_CSV_EXTENSION,
 };
 use datafusion_common_runtime::SpawnedTask;
 use datafusion_datasource::decoder::Decoder;

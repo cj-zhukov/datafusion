@@ -135,9 +135,14 @@ impl PhysicalExpr for NegativeExpr {
             .map(|result| vec![result]))
     }
 
-    fn evaluate_statistics(&self, children: &[&ProbabilityDistribution]) -> Result<ProbabilityDistribution> {
+    fn evaluate_statistics(
+        &self,
+        children: &[&ProbabilityDistribution],
+    ) -> Result<ProbabilityDistribution> {
         match children[0] {
-            Uniform(u) => ProbabilityDistribution::new_uniform(u.range().arithmetic_negate()?),
+            Uniform(u) => {
+                ProbabilityDistribution::new_uniform(u.range().arithmetic_negate()?)
+            }
             Exponential(e) => ProbabilityDistribution::new_exponential(
                 e.rate().clone(),
                 e.offset().arithmetic_negate()?,
@@ -258,26 +263,31 @@ mod tests {
 
         // Uniform
         assert_eq!(
-            negative_expr.evaluate_statistics(&[&ProbabilityDistribution::new_uniform(
-                Interval::make(Some(-2.), Some(3.))?
-            )?])?,
+            negative_expr.evaluate_statistics(&[
+                &ProbabilityDistribution::new_uniform(Interval::make(
+                    Some(-2.),
+                    Some(3.)
+                )?)?
+            ])?,
             ProbabilityDistribution::new_uniform(Interval::make(Some(-3.), Some(2.))?)?
         );
 
         // Bernoulli
         assert!(negative_expr
-            .evaluate_statistics(&[&ProbabilityDistribution::new_bernoulli(ScalarValue::from(
-                0.75
-            ))?])
+            .evaluate_statistics(&[&ProbabilityDistribution::new_bernoulli(
+                ScalarValue::from(0.75)
+            )?])
             .is_err());
 
         // Exponential
         assert_eq!(
-            negative_expr.evaluate_statistics(&[&ProbabilityDistribution::new_exponential(
-                ScalarValue::from(1.),
-                ScalarValue::from(1.),
-                true
-            )?])?,
+            negative_expr.evaluate_statistics(&[
+                &ProbabilityDistribution::new_exponential(
+                    ScalarValue::from(1.),
+                    ScalarValue::from(1.),
+                    true
+                )?
+            ])?,
             ProbabilityDistribution::new_exponential(
                 ScalarValue::from(1.),
                 ScalarValue::from(-1.),
@@ -287,21 +297,28 @@ mod tests {
 
         // Gaussian
         assert_eq!(
-            negative_expr.evaluate_statistics(&[&ProbabilityDistribution::new_gaussian(
-                ScalarValue::from(15),
+            negative_expr.evaluate_statistics(&[
+                &ProbabilityDistribution::new_gaussian(
+                    ScalarValue::from(15),
+                    ScalarValue::from(225),
+                )?
+            ])?,
+            ProbabilityDistribution::new_gaussian(
+                ScalarValue::from(-15),
                 ScalarValue::from(225),
-            )?])?,
-            ProbabilityDistribution::new_gaussian(ScalarValue::from(-15), ScalarValue::from(225),)?
+            )?
         );
 
         // Unknown
         assert_eq!(
-            negative_expr.evaluate_statistics(&[&ProbabilityDistribution::new_generic(
-                ScalarValue::from(15),
-                ScalarValue::from(15),
-                ScalarValue::from(10),
-                Interval::make(Some(10), Some(20))?
-            )?])?,
+            negative_expr.evaluate_statistics(&[
+                &ProbabilityDistribution::new_generic(
+                    ScalarValue::from(15),
+                    ScalarValue::from(15),
+                    ScalarValue::from(10),
+                    Interval::make(Some(10), Some(20))?
+                )?
+            ])?,
             ProbabilityDistribution::new_generic(
                 ScalarValue::from(-15),
                 ScalarValue::from(-15),
@@ -335,9 +352,12 @@ mod tests {
         let original_child_interval = Interval::make(Some(-2), Some(3))?;
         let after_propagation = Interval::make(Some(-2), Some(0))?;
 
-        let parent = ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(4))?)?;
+        let parent =
+            ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(4))?)?;
         let children: Vec<Vec<ProbabilityDistribution>> = vec![
-            vec![ProbabilityDistribution::new_uniform(original_child_interval.clone())?],
+            vec![ProbabilityDistribution::new_uniform(
+                original_child_interval.clone(),
+            )?],
             vec![ProbabilityDistribution::new_generic(
                 ScalarValue::from(0),
                 ScalarValue::from(0),

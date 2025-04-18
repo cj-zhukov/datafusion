@@ -266,11 +266,7 @@ impl ExecutionPlan for MockExec {
 
         let data = data?;
 
-        common::compute_record_batch_statistics(
-            &[data],
-            &self.schema,
-            None,
-        )
+        common::compute_record_batch_statistics(&[data], &self.schema, None)
     }
 }
 
@@ -405,11 +401,7 @@ impl ExecutionPlan for BarrierExec {
     }
 
     fn statistics(&self) -> Result<TableStatistics> {
-        common::compute_record_batch_statistics(
-            &self.data,
-            &self.schema,
-            None,
-        )
+        common::compute_record_batch_statistics(&self.data, &self.schema, None)
     }
 }
 

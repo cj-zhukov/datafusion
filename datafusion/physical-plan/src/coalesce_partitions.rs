@@ -188,7 +188,13 @@ impl ExecutionPlan for CoalescePartitionsExec {
     }
 
     fn statistics(&self) -> Result<TableStatistics> {
-        TableStatistics::with_fetch(self.input.statistics()?, self.schema(), self.fetch, 0, 1)
+        TableStatistics::with_fetch(
+            self.input.statistics()?,
+            self.schema(),
+            self.fetch,
+            0,
+            1,
+        )
     }
 
     fn supports_limit_pushdown(&self) -> bool {

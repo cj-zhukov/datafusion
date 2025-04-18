@@ -62,9 +62,7 @@ use datafusion_physical_plan::sorts::sort_preserving_merge::SortPreservingMergeE
 use datafusion_physical_plan::union::UnionExec;
 use datafusion_physical_plan::ExecutionPlanProperties;
 use datafusion_physical_plan::PlanProperties;
-use datafusion_physical_plan::{
-    get_plan_string, DisplayAs, DisplayFormatType,
-};
+use datafusion_physical_plan::{get_plan_string, DisplayAs, DisplayFormatType};
 
 /// Models operators like BoundedWindowExec that require an input
 /// ordering but is easy to construct

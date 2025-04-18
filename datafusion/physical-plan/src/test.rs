@@ -36,9 +36,7 @@ use crate::{DisplayAs, DisplayFormatType, PlanProperties};
 
 use arrow::array::{Array, ArrayRef, Int32Array, RecordBatch};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
-use datafusion_common::{
-    config::ConfigOptions, internal_err, project_schema, Result,
-};
+use datafusion_common::{config::ConfigOptions, internal_err, project_schema, Result};
 use datafusion_execution::{SendableRecordBatchStream, TaskContext};
 use datafusion_expr::statistics::TableStatistics;
 use datafusion_physical_expr::{

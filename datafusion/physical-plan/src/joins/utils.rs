@@ -26,9 +26,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::metrics::{self, ExecutionPlanMetricsSet, MetricBuilder};
-use crate::{
-    ExecutionPlan, ExecutionPlanProperties, Partitioning,
-};
+use crate::{ExecutionPlan, ExecutionPlanProperties, Partitioning};
 // compatibility
 pub use super::join_filter::JoinFilter;
 
@@ -45,10 +43,12 @@ use arrow_schema::DataType;
 use datafusion_common::cast::as_boolean_array;
 use datafusion_common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion_common::{
-    plan_err, DataFusionError, JoinSide, JoinType, Result, ScalarValue, SharedResult
+    plan_err, DataFusionError, JoinSide, JoinType, Result, ScalarValue, SharedResult,
 };
 use datafusion_expr::interval_arithmetic::Interval;
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::add_offset_to_expr;
 use datafusion_physical_expr::expressions::Column;
@@ -737,12 +737,20 @@ pub(crate) fn estimate_join_statistics(
     let left_stats = left.statistics()?;
     let right_stats = right.statistics()?;
 
-    let join_stats = estimate_join_cardinality(join_type, left_stats.clone(), right_stats, &on);
+    let join_stats =
+        estimate_join_cardinality(join_type, left_stats.clone(), right_stats, &on);
     let (num_rows, column_statistics) = match join_stats {
-        Some(stats) => (ProbabilityDistribution::new_exact(stats.num_rows)?, stats.column_statistics),
-        None => (ProbabilityDistribution::new_unknown(&left_stats.num_rows.data_type())?, TableStatistics::unknown_column(schema)?)
+        Some(stats) => (
+            ProbabilityDistribution::new_exact(stats.num_rows)?,
+            stats.column_statistics,
+        ),
+        None => (
+            ProbabilityDistribution::new_unknown(&left_stats.num_rows.data_type())?,
+            TableStatistics::unknown_column(schema)?,
+        ),
     };
-    let total_byte_size = ProbabilityDistribution::new_unknown(&left_stats.total_byte_size.data_type())?;
+    let total_byte_size =
+        ProbabilityDistribution::new_unknown(&left_stats.total_byte_size.data_type())?;
 
     Ok(TableStatistics {
         num_rows,
@@ -776,11 +784,15 @@ fn estimate_join_cardinality(
             }
         })
         .unzip::<_, _, Vec<_>, Vec<_>>();
-    
-    let scalar_null = ScalarValue::try_new_null(&left_stats.num_rows.data_type()).unwrap();
+
+    let scalar_null =
+        ScalarValue::try_new_null(&left_stats.num_rows.data_type()).unwrap();
     match join_type {
         JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
-            let total_byte_size = ProbabilityDistribution::new_unknown(&left_stats.total_byte_size.data_type()).unwrap_or_default();
+            let total_byte_size = ProbabilityDistribution::new_unknown(
+                &left_stats.total_byte_size.data_type(),
+            )
+            .unwrap_or_default();
             let ij_cardinality = estimate_inner_join_cardinality(
                 TableStatistics {
                     num_rows: left_stats.num_rows.clone(),
@@ -805,9 +817,18 @@ fn estimate_join_cardinality(
                 JoinType::Full => {
                     let left_max = ij_cardinality.max(&left_stats.num_rows);
                     let right_max = ij_cardinality.max(&right_stats.num_rows);
-                    let to_add = 
-                        ProbabilityDistribution::combine_distributions(&Operator::Plus, &left_max, &right_max).unwrap_or_default();
-                    ProbabilityDistribution::combine_distributions(&Operator::Minus, &to_add, &ij_cardinality).unwrap_or_default()
+                    let to_add = ProbabilityDistribution::combine_distributions(
+                        &Operator::Plus,
+                        &left_max,
+                        &right_max,
+                    )
+                    .unwrap_or_default();
+                    ProbabilityDistribution::combine_distributions(
+                        &Operator::Minus,
+                        &to_add,
+                        &ij_cardinality,
+                    )
+                    .unwrap_or_default()
                 }
                 _ => unreachable!(),
             };
@@ -854,7 +875,11 @@ fn estimate_join_cardinality(
             };
 
             Some(PartialJoinStatistics {
-                num_rows: outer_stats.num_rows.get_value().unwrap_or(&scalar_null).clone(),
+                num_rows: outer_stats
+                    .num_rows
+                    .get_value()
+                    .unwrap_or(&scalar_null)
+                    .clone(),
                 column_statistics: outer_stats.column_statistics,
             })
         }
@@ -863,7 +888,11 @@ fn estimate_join_cardinality(
             let mut column_statistics = left_stats.column_statistics;
             column_statistics.push(ColumnStatistics::new_unknown().unwrap_or_default());
             Some(PartialJoinStatistics {
-                num_rows: left_stats.num_rows.get_value().unwrap_or(&scalar_null).clone(),
+                num_rows: left_stats
+                    .num_rows
+                    .get_value()
+                    .unwrap_or(&scalar_null)
+                    .clone(),
                 column_statistics,
             })
         }
@@ -885,17 +914,19 @@ fn estimate_inner_join_cardinality(
 
     // The algorithm here is partly based on the non-histogram selectivity estimation
     // from Spark's Catalyst optimizer.
-    let mut join_selectivity = ProbabilityDistribution::new_unknown(&left_stats.num_rows.data_type()).unwrap_or_default();
+    let mut join_selectivity =
+        ProbabilityDistribution::new_unknown(&left_stats.num_rows.data_type())
+            .unwrap_or_default();
     for (left_stat, right_stat) in left_stats
         .column_statistics
         .iter()
         .zip(right_stats.column_statistics.iter())
     {
         // Break if any of statistics bounds are undefined
-        if left_stat.min_value.get_value().is_none() 
+        if left_stat.min_value.get_value().is_none()
             || left_stat.max_value.get_value().is_none()
             || right_stat.min_value.get_value().is_none()
-            || right_stat.max_value.get_value().is_none() 
+            || right_stat.max_value.get_value().is_none()
         {
             return None;
         }
@@ -907,7 +938,8 @@ fn estimate_inner_join_cardinality(
         // exponential decay for the selectivity (like Hive's Optiq Optimizer). Needs
         // further exploration.
         if let Some(max_distinct) = max_distinct.get_value() {
-            join_selectivity = ProbabilityDistribution::new_exact(max_distinct.clone()).unwrap_or_default();
+            join_selectivity = ProbabilityDistribution::new_exact(max_distinct.clone())
+                .unwrap_or_default();
         }
     }
 
@@ -917,9 +949,20 @@ fn estimate_inner_join_cardinality(
     let scalar_null = ScalarValue::try_new_null(&join_selectivity.data_type()).unwrap();
     let value = join_selectivity.get_value().unwrap_or(&scalar_null);
     if value > &ScalarValue::new_one(&join_selectivity.data_type()).unwrap() {
-        let res = 
-            ProbabilityDistribution::combine_distributions(&Operator::Multiply, &left_stats.num_rows, &right_stats.num_rows).unwrap_or_default();
-        Some(ProbabilityDistribution::combine_distributions(&Operator::Divide, &res, &join_selectivity).unwrap_or_default())
+        let res = ProbabilityDistribution::combine_distributions(
+            &Operator::Multiply,
+            &left_stats.num_rows,
+            &right_stats.num_rows,
+        )
+        .unwrap_or_default();
+        Some(
+            ProbabilityDistribution::combine_distributions(
+                &Operator::Divide,
+                &res,
+                &join_selectivity,
+            )
+            .unwrap_or_default(),
+        )
     } else {
         None
     }
@@ -957,16 +1000,17 @@ fn estimate_disjoint_inputs(
         let right_max_val = right_stat.max_value.get_value().unwrap_or(&null);
         if left_min_val > right_max_val {
             return Some(
-                ProbabilityDistribution::new_zero(&left_min_val.data_type()).unwrap_or_default()
+                ProbabilityDistribution::new_zero(&left_min_val.data_type())
+                    .unwrap_or_default(),
             );
         }
 
         let left_max_val = left_stat.max_value.get_value().unwrap_or(&null);
         let right_min_val = right_stat.min_value.get_value().unwrap_or(&null);
-        if left_max_val < right_min_val
-        {
+        if left_max_val < right_min_val {
             return Some(
-                ProbabilityDistribution::new_zero(&left_max_val.data_type()).unwrap_or_default()
+                ProbabilityDistribution::new_zero(&left_max_val.data_type())
+                    .unwrap_or_default(),
             );
         }
     }
@@ -983,13 +1027,15 @@ fn max_distinct_count(
     stats: &ColumnStatistics,
 ) -> ProbabilityDistribution {
     let result = match num_rows.get_value() {
-        None => ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default(),
+        None => {
+            ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default()
+        }
         Some(val) => {
             let zero = ScalarValue::new_zero(&val.data_type()).unwrap();
             let null_count = stats.null_count.get_value().unwrap_or(&zero);
             let count = val.sub(null_count).unwrap();
             ProbabilityDistribution::new_exact(count).unwrap_or_default()
-        },
+        }
     };
 
     if let (Some(min), Some(max)) =
@@ -1000,14 +1046,19 @@ fn max_distinct_count(
             .and_then(|e| e.cardinality())
         {
             let null = ScalarValue::try_new_null(&min.data_type()).unwrap();
-            return if &ScalarValue::UInt64(Some(range_dc)) < &result.get_value().unwrap_or(&null)
+            return if &ScalarValue::UInt64(Some(range_dc))
+                < &result.get_value().unwrap_or(&null)
             {
                 if stats.min_value.is_exact().unwrap()
                     && stats.max_value.is_exact().unwrap()
                 {
-                    ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(range_dc))).unwrap_or_default()
+                    ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(
+                        range_dc,
+                    )))
+                    .unwrap_or_default()
                 } else {
-                    ProbabilityDistribution::new_unknown(&min.data_type()).unwrap_or_default()
+                    ProbabilityDistribution::new_unknown(&min.data_type())
+                        .unwrap_or_default()
                 }
             } else {
                 result
@@ -1015,7 +1066,7 @@ fn max_distinct_count(
         }
     }
 
-    result    
+    result
 }
 
 enum OnceFutState<T> {

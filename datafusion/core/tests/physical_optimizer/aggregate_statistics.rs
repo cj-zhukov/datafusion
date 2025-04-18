@@ -24,7 +24,7 @@ use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use datafusion::datasource::memory::MemorySourceConfig;
 use datafusion::datasource::source::DataSourceExec;
-use datafusion_common::cast::{as_int64_array, as_uint64_array};
+use datafusion_common::cast::as_int64_array;
 use datafusion_common::config::ConfigOptions;
 use datafusion_common::Result;
 use datafusion_execution::TaskContext;

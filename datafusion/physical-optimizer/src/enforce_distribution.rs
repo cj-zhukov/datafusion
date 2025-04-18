@@ -1115,9 +1115,17 @@ fn get_repartition_requirement_status(
         // the statistical information we have on the number of rows:
         let scalar_null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
         let roundrobin_beneficial_stats = match child.statistics()?.num_rows.get_value() {
-            None => true, 
-            _ => !should_use_estimates || (child.statistics()?.num_rows.get_value().unwrap_or(&scalar_null) > &ScalarValue::from(batch_size as u64))
-        };  
+            None => true,
+            _ => {
+                !should_use_estimates
+                    || (child
+                        .statistics()?
+                        .num_rows
+                        .get_value()
+                        .unwrap_or(&scalar_null)
+                        > &ScalarValue::from(batch_size as u64))
+            }
+        };
         let is_hash = matches!(requirement, Distribution::HashPartitioned(_));
         // Hash re-partitioning is necessary when the input has more than one
         // partitions:

@@ -43,7 +43,9 @@ use datafusion_common::{
     Column, ColumnStatistics, Constraint, Constraints, DFSchema, DFSchemaRef,
     DataFusionError, JoinSide, ScalarValue, Statistics, TableReference,
 };
-use datafusion_expr::statistics::TableStatistics;
+use datafusion_expr::statistics::{
+    ColumnStatistics as ColumnStatsDistr, ProbabilityDistribution, TableStatistics,
+};
 
 #[derive(Debug)]
 pub enum Error {
@@ -823,19 +825,128 @@ impl TryFrom<&protobuf::Statistics> for Statistics {
     }
 }
 
-impl TryFrom<&protobuf::TableStatistics> for TableStatistics {
-    type Error = DataFusionError;
-
-    fn try_from(
-        s: &protobuf::TableStatistics,
-    ) -> datafusion_common::Result<Self, Self::Error> {
-        todo!()
+impl From<&protobuf::ProbabilityDistr> for ProbabilityDistribution {
+    fn from(s: &protobuf::ProbabilityDistr) -> Self {
+        if let Some(val) = &s.val {
+            if let Ok(ScalarValue::UInt64(Some(val))) = ScalarValue::try_from(val) {
+                ProbabilityDistribution::new_exact(val.into()).unwrap_or_default()
+            } else {
+                ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default()
+            }
+        } else {
+            ProbabilityDistribution::new_unknown(&DataType::UInt64).unwrap_or_default()
+        }
     }
 }
 
-impl From<&TableStatistics> for protobuf::TableStatistics {
+impl TryFrom<&protobuf::TableStats> for TableStatistics {
+    type Error = DataFusionError;
+
+    fn try_from(
+        s: &protobuf::TableStats,
+    ) -> datafusion_common::Result<Self, Self::Error> {
+        Ok(TableStatistics {
+            num_rows: if let Some(nr) = &s.num_rows {
+                nr.into()
+            } else {
+                ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default()
+            },
+            total_byte_size: if let Some(tbs) = &s.total_byte_size {
+                tbs.into()
+            } else {
+                ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default()
+            },
+            column_statistics: s.column_stats.iter().map(|s| s.into()).collect(),
+        })
+    }
+}
+
+impl From<&protobuf::ColStats> for ColumnStatsDistr {
+    fn from(cs: &protobuf::ColStats) -> Self {
+        ColumnStatsDistr {
+            null_count: if let Some(nc) = &cs.null_count {
+                nc.into()
+            } else {
+                ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default()
+            },
+            max_value: if let Some(max) = &cs.max_value {
+                max.into()
+            } else {
+                ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default()
+            },
+            min_value: if let Some(min) = &cs.min_value {
+                min.into()
+            } else {
+                ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default()
+            },
+            sum_value: if let Some(sum) = &cs.sum_value {
+                sum.into()
+            } else {
+                ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default()
+            },
+            distinct_count: if let Some(dc) = &cs.distinct_count {
+                dc.into()
+            } else {
+                ProbabilityDistribution::new_unknown(&DataType::UInt64)
+                    .unwrap_or_default()
+            },
+        }
+    }
+}
+
+impl From<&TableStatistics> for protobuf::TableStats {
     fn from(value: &TableStatistics) -> Self {
-        todo!()
+        Self {
+            num_rows: Some(value.num_rows.clone().into()),
+            total_byte_size: Some(value.total_byte_size.clone().into()),
+            column_stats: value
+                .column_statistics
+                .iter()
+                .map(|v| v.clone().into())
+                .collect(),
+        }
+    }
+}
+
+impl From<ProbabilityDistribution> for protobuf::ProbabilityDistr {
+    fn from(value: ProbabilityDistribution) -> Self {
+        match value.get_value() {
+            None => Self { val: None },
+            Some(val) => Self {
+                val: Some(val.clone().into()),
+            },
+        }
+    }
+}
+
+impl From<ScalarValue> for protobuf::ScalarValue {
+    fn from(value: ScalarValue) -> Self {
+        use protobuf::scalar_value::Value;
+
+        let val = match value {
+            ScalarValue::UInt64(v) => Value::Uint64Value(v.unwrap_or(u64::MIN)),
+            _ => unimplemented!(),
+        };
+        protobuf::ScalarValue { value: Some(val) }
+    }
+}
+
+impl From<ColumnStatsDistr> for protobuf::ColStats {
+    fn from(value: ColumnStatsDistr) -> Self {
+        Self {
+            min_value: Some(value.min_value.into()),
+            max_value: Some(value.max_value.into()),
+            sum_value: Some(value.sum_value.into()),
+            null_count: Some(value.null_count.into()),
+            distinct_count: Some(value.distinct_count.into()),
+        }
     }
 }
 

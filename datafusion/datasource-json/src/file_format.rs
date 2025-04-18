@@ -32,9 +32,7 @@ use arrow::json::reader::{infer_json_schema_from_iterator, ValueIter};
 use datafusion_catalog::Session;
 use datafusion_common::config::{ConfigField, ConfigFileType, JsonOptions};
 use datafusion_common::file_options::json_writer::JsonWriterOptions;
-use datafusion_common::{
-    not_impl_err, GetExt, Result, DEFAULT_JSON_EXTENSION,
-};
+use datafusion_common::{not_impl_err, GetExt, Result, DEFAULT_JSON_EXTENSION};
 use datafusion_common_runtime::SpawnedTask;
 use datafusion_datasource::decoder::Decoder;
 use datafusion_datasource::display::FileGroupDisplay;

@@ -498,10 +498,11 @@ impl TableProvider for IndexTableProvider {
                 // provide the factory to create parquet reader without re-reading metadata
                 .with_parquet_file_reader_factory(Arc::new(reader_factory)),
         );
-        let file_scan_config = FileScanConfig::new(object_store_url, schema, file_source)?
-            .with_limit(limit)
-            .with_projection(projection.cloned())
-            .with_file(partitioned_file);
+        let file_scan_config =
+            FileScanConfig::new(object_store_url, schema, file_source)?
+                .with_limit(limit)
+                .with_projection(projection.cloned())
+                .with_file(partitioned_file);
 
         // Finally, put it all together into a DataSourceExec
         Ok(file_scan_config.build())

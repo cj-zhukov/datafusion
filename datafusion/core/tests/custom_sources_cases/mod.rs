@@ -37,7 +37,9 @@ use datafusion::physical_plan::{
 use datafusion_catalog::Session;
 use datafusion_common::cast::as_primitive_array;
 use datafusion_common::{project_schema, ScalarValue};
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use datafusion_physical_expr::EquivalenceProperties;
 use datafusion_physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion_physical_plan::placeholder_row::PlaceholderRowExec;
@@ -183,17 +185,27 @@ impl ExecutionPlan for CustomExecutionPlan {
         let n_rows = ScalarValue::UInt64(Some(batch.num_rows() as u64));
         let total_byte_size = ProbabilityDistribution::new_unknown(&DataType::UInt64)?;
         let num_rows = ProbabilityDistribution::new_exact(n_rows)?;
-        let column_statistics = self.projection
+        let column_statistics = self
+            .projection
             .clone()
-            .unwrap_or_else(|| (0..batch.columns().len())
-            .collect())
+            .unwrap_or_else(|| (0..batch.columns().len()).collect())
             .iter()
             .map(|i| {
-                let null_count = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(batch.column(*i).null_count() as u64))).unwrap_or_default();
-                let min_val = aggregate::min(as_primitive_array::<Int32Type>(batch.column(*i)).unwrap());
-                let min_value = ProbabilityDistribution::new_exact(ScalarValue::Int32(min_val)).unwrap_or_default();
-                let max_val = ScalarValue::Int32(aggregate::max(as_primitive_array::<Int32Type>(batch.column(*i)).unwrap()));
-                let max_value = ProbabilityDistribution::new_exact(max_val).unwrap_or_default();
+                let null_count = ProbabilityDistribution::new_exact(ScalarValue::UInt64(
+                    Some(batch.column(*i).null_count() as u64),
+                ))
+                .unwrap_or_default();
+                let min_val = aggregate::min(
+                    as_primitive_array::<Int32Type>(batch.column(*i)).unwrap(),
+                );
+                let min_value =
+                    ProbabilityDistribution::new_exact(ScalarValue::Int32(min_val))
+                        .unwrap_or_default();
+                let max_val = ScalarValue::Int32(aggregate::max(
+                    as_primitive_array::<Int32Type>(batch.column(*i)).unwrap(),
+                ));
+                let max_value =
+                    ProbabilityDistribution::new_exact(max_val).unwrap_or_default();
 
                 ColumnStatistics {
                     null_count,
@@ -201,8 +213,9 @@ impl ExecutionPlan for CustomExecutionPlan {
                     min_value,
                     ..Default::default()
                 }
-            }).collect();
-            
+            })
+            .collect();
+
         Ok(TableStatistics {
             num_rows,
             total_byte_size,

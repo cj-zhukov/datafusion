@@ -181,7 +181,8 @@ trait FromColumnStatistics {
                     // TODO optimize with exprs other than Column
                     if let Some(col_expr) = statistics_args.exprs[0]
                         .as_any()
-                        .downcast_ref::<expressions::Column>() {
+                        .downcast_ref::<expressions::Column>()
+                    {
                         self.value_from_column_statistics(&col_stats[col_expr.index()])
                     } else {
                         None
@@ -191,7 +192,6 @@ trait FromColumnStatistics {
                 }
             }
         }
-    
     }
 }
 

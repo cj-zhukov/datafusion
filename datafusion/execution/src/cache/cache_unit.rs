@@ -61,7 +61,11 @@ impl CacheAccessor<Path, Arc<TableStatistics>> for DefaultFileStatisticsCache {
     }
 
     /// Save collected file statistics
-    fn put(&self, _key: &Path, _value: Arc<TableStatistics>) -> Option<Arc<TableStatistics>> {
+    fn put(
+        &self,
+        _key: &Path,
+        _value: Arc<TableStatistics>,
+    ) -> Option<Arc<TableStatistics>> {
         panic!("Put cache in DefaultFileStatisticsCache without Extra not supported.")
     }
 

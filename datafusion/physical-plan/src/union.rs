@@ -28,9 +28,8 @@ use std::{any::Any, sync::Arc};
 
 use super::{
     metrics::{ExecutionPlanMetricsSet, MetricsSet},
-    DisplayAs, DisplayFormatType, ExecutionPlan,
-    ExecutionPlanProperties, Partitioning, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream,
+    DisplayAs, DisplayFormatType, ExecutionPlan, ExecutionPlanProperties, Partitioning,
+    PlanProperties, RecordBatchStream, SendableRecordBatchStream,
 };
 use crate::execution_plan::{
     boundedness_from_children, emission_type_from_children, InvariantLevel,
@@ -43,7 +42,9 @@ use arrow::datatypes::{Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use datafusion_common::{exec_err, internal_err, DataFusionError, Result};
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::{calculate_union, EquivalenceProperties};
 
@@ -268,12 +269,9 @@ impl ExecutionPlan for UnionExec {
             .map(|stat| stat.statistics())
             .collect::<Result<Vec<_>>>()?;
 
-        match stats
-            .into_iter()
-            .reduce(stats_union) 
-        {
+        match stats.into_iter().reduce(stats_union) {
             Some(res) => Ok(res),
-            None => TableStatistics::new_unknown(&self.schema())
+            None => TableStatistics::new_unknown(&self.schema()),
         }
     }
 
@@ -487,15 +485,13 @@ impl ExecutionPlan for InterleaveExec {
             .map(|stat| stat.statistics())
             .collect::<Result<Vec<_>>>()?;
 
-        match stats
-            .into_iter()
-            .reduce(stats_union) {
-                Some(stats) => Ok(stats),
-                None => {
-                    let stats = TableStatistics::new_unknown(&self.schema())?;
-                    Ok(stats)
-                }
+        match stats.into_iter().reduce(stats_union) {
+            Some(stats) => Ok(stats),
+            None => {
+                let stats = TableStatistics::new_unknown(&self.schema())?;
+                Ok(stats)
             }
+        }
     }
 
     fn benefits_from_input_partitioning(&self) -> Vec<bool> {
@@ -632,17 +628,39 @@ fn col_stats_union(
     mut left: ColumnStatistics,
     right: ColumnStatistics,
 ) -> ColumnStatistics {
-    left.distinct_count = ProbabilityDistribution::new_unknown(&left.distinct_count.data_type()).unwrap_or_default();
+    left.distinct_count =
+        ProbabilityDistribution::new_unknown(&left.distinct_count.data_type())
+            .unwrap_or_default();
     left.min_value = left.min_value.min(&right.min_value);
     left.max_value = left.max_value.max(&right.max_value);
-    left.sum_value = ProbabilityDistribution::combine_distributions(&Operator::Plus, &left.sum_value, &right.sum_value).unwrap_or_default();
-    left.null_count = ProbabilityDistribution::combine_distributions(&Operator::Plus, &left.null_count, &right.null_count).unwrap_or_default();
+    left.sum_value = ProbabilityDistribution::combine_distributions(
+        &Operator::Plus,
+        &left.sum_value,
+        &right.sum_value,
+    )
+    .unwrap_or_default();
+    left.null_count = ProbabilityDistribution::combine_distributions(
+        &Operator::Plus,
+        &left.null_count,
+        &right.null_count,
+    )
+    .unwrap_or_default();
     left
 }
 
 fn stats_union(mut left: TableStatistics, right: TableStatistics) -> TableStatistics {
-    left.num_rows = ProbabilityDistribution::combine_distributions(&Operator::Plus, &left.num_rows, &right.num_rows).unwrap_or_default();
-    left.total_byte_size = ProbabilityDistribution::combine_distributions(&Operator::Plus, &left.total_byte_size, &right.total_byte_size).unwrap_or_default();
+    left.num_rows = ProbabilityDistribution::combine_distributions(
+        &Operator::Plus,
+        &left.num_rows,
+        &right.num_rows,
+    )
+    .unwrap_or_default();
+    left.total_byte_size = ProbabilityDistribution::combine_distributions(
+        &Operator::Plus,
+        &left.total_byte_size,
+        &right.total_byte_size,
+    )
+    .unwrap_or_default();
     left.column_statistics = left
         .column_statistics
         .into_iter()

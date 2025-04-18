@@ -75,7 +75,7 @@ pub(crate) fn should_swap_join_order(
         right_stats.total_byte_size.get_value(),
     ) {
         (Some(left), Some(right)) => Ok(left > right),
-        _ => Ok(false)
+        _ => Ok(false),
     }
 }
 
@@ -92,13 +92,15 @@ fn supports_collect_by_thresholds(
 
     let scalar_null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
     let byte_size = stats.total_byte_size.get_value().unwrap_or(&scalar_null);
-    let threshold_byte_size= ScalarValue::try_from(threshold_byte_size as u64).unwrap_or(scalar_null.clone());
+    let threshold_byte_size =
+        ScalarValue::try_from(threshold_byte_size as u64).unwrap_or(scalar_null.clone());
     let num_rows = stats.num_rows.get_value().unwrap_or(&scalar_null);
-    let threshold_num_rows = ScalarValue::try_from(threshold_num_rows as u64).unwrap_or(scalar_null.clone());
+    let threshold_num_rows =
+        ScalarValue::try_from(threshold_num_rows as u64).unwrap_or(scalar_null.clone());
     if byte_size.is_null() {
         *byte_size < threshold_byte_size
     } else if num_rows.is_null() {
-       *num_rows < threshold_num_rows
+        *num_rows < threshold_num_rows
     } else {
         false
     }

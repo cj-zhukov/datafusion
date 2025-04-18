@@ -21,12 +21,8 @@ use arrow::{
     array::{AsArray, RecordBatch, StringArray, UInt8Array},
     datatypes::{DataType, Field, Schema, SchemaRef, UInt64Type},
 };
-use datafusion::{logical_expr::statistics::TableStatistics, physical_expr::LexRequirement};
 use datafusion::physical_expr::PhysicalExpr;
-use datafusion::{
-    catalog::Session,
-    common::GetExt,
-};
+use datafusion::{catalog::Session, common::GetExt};
 use datafusion::{
     datasource::physical_plan::FileSource, execution::session_state::SessionStateBuilder,
 };
@@ -42,6 +38,9 @@ use datafusion::{
     error::Result,
     physical_plan::ExecutionPlan,
     prelude::SessionContext,
+};
+use datafusion::{
+    logical_expr::statistics::TableStatistics, physical_expr::LexRequirement,
 };
 use object_store::{ObjectMeta, ObjectStore};
 use tempfile::tempdir;

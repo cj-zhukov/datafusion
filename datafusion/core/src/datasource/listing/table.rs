@@ -1222,10 +1222,18 @@ mod tests {
         assert_eq!(exec.output_partitioning().partition_count(), 1);
 
         // test metadata
-        let expected_num_rows = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(8)))?;
-        let expected_total_byte_size = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(671)))?;
-        assert_eq!(exec.statistics()?.num_rows.get_value(), expected_num_rows.get_value());
-        assert_eq!(exec.statistics()?.total_byte_size.get_value(), expected_total_byte_size.get_value());
+        let expected_num_rows =
+            ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(8)))?;
+        let expected_total_byte_size =
+            ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(671)))?;
+        assert_eq!(
+            exec.statistics()?.num_rows.get_value(),
+            expected_num_rows.get_value()
+        );
+        assert_eq!(
+            exec.statistics()?.total_byte_size.get_value(),
+            expected_total_byte_size.get_value()
+        );
 
         Ok(())
     }
@@ -1862,24 +1870,24 @@ mod tests {
         Ok(())
     }
 
-    // #[cfg(feature = "parquet")]
-    // #[tokio::test]
-    // async fn test_insert_into_append_1_new_parquet_files_defaults() -> Result<()> {
-    //     let mut config_map: HashMap<String, String> = HashMap::new();
-    //     config_map.insert("datafusion.execution.batch_size".into(), "20".into());
-    //     config_map.insert(
-    //         "datafusion.execution.soft_max_rows_per_output_file".into(),
-    //         "20".into(),
-    //     );
-    //     helper_test_append_new_files_to_table(
-    //         ParquetFormat::default().get_ext(),
-    //         FileCompressionType::UNCOMPRESSED,
-    //         Some(config_map),
-    //         1,
-    //     )
-    //     .await?;
-    //     Ok(())
-    // }
+    #[cfg(feature = "parquet")]
+    #[tokio::test]
+    async fn test_insert_into_append_1_new_parquet_files_defaults() -> Result<()> {
+        let mut config_map: HashMap<String, String> = HashMap::new();
+        config_map.insert("datafusion.execution.batch_size".into(), "20".into());
+        config_map.insert(
+            "datafusion.execution.soft_max_rows_per_output_file".into(),
+            "20".into(),
+        );
+        helper_test_append_new_files_to_table(
+            ParquetFormat::default().get_ext(),
+            FileCompressionType::UNCOMPRESSED,
+            Some(config_map),
+            1,
+        )
+        .await?;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_insert_into_sql_csv_defaults() -> Result<()> {

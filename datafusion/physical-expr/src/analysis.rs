@@ -26,9 +26,7 @@ use crate::utils::collect_columns;
 use crate::PhysicalExpr;
 
 use arrow::datatypes::{DataType, Schema};
-use datafusion_common::{
-    internal_datafusion_err, internal_err, Result, ScalarValue,
-};
+use datafusion_common::{internal_datafusion_err, internal_err, Result, ScalarValue};
 use datafusion_expr::interval_arithmetic::{cardinality_ratio, Interval};
 use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution};
 
@@ -106,8 +104,16 @@ impl ExprBoundaries {
             )
         })?;
         let empty_field = ScalarValue::try_from(field.data_type())?;
-        let min_value = col_stats.min_value.get_value().unwrap_or(&empty_field).clone();
-        let max_value = col_stats.max_value.get_value().unwrap_or(&empty_field).clone();
+        let min_value = col_stats
+            .min_value
+            .get_value()
+            .unwrap_or(&empty_field)
+            .clone();
+        let max_value = col_stats
+            .max_value
+            .get_value()
+            .unwrap_or(&empty_field)
+            .clone();
         let interval = Interval::try_new(min_value, max_value)?;
         let column = Column::new(field.name(), col_index);
         Ok(ExprBoundaries {
@@ -128,7 +134,9 @@ impl ExprBoundaries {
                 Ok(Self {
                     column: Column::new(field.name(), i),
                     interval: Some(Interval::make_unbounded(field.data_type())?),
-                    distinct_count: ProbabilityDistribution::new_unknown(field.data_type())?,
+                    distinct_count: ProbabilityDistribution::new_unknown(
+                        field.data_type(),
+                    )?,
                 })
             })
             .collect()
@@ -160,10 +168,13 @@ pub fn analyze(
         .iter()
         .all(|bound| bound.interval.is_none())
     {
-        if initial_boundaries
-            .iter()
-            .any(|bound| bound.distinct_count != ProbabilityDistribution::new_uniform(Interval::make_zero(&DataType::UInt64).unwrap()).unwrap())
-        {
+        if initial_boundaries.iter().any(|bound| {
+            bound.distinct_count
+                != ProbabilityDistribution::new_uniform(
+                    Interval::make_zero(&DataType::UInt64).unwrap(),
+                )
+                .unwrap()
+        }) {
             return internal_err!(
                 "ExprBoundaries has a non-zero distinct count although it represents an empty table"
             );

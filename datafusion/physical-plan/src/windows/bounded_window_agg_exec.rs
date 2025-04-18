@@ -34,9 +34,9 @@ use crate::windows::{
     window_equivalence_properties,
 };
 use crate::{
-    DisplayAs, DisplayFormatType, Distribution, ExecutionPlan,
-    ExecutionPlanProperties, InputOrderMode, PlanProperties, RecordBatchStream,
-    SendableRecordBatchStream, WindowExpr,
+    DisplayAs, DisplayFormatType, Distribution, ExecutionPlan, ExecutionPlanProperties,
+    InputOrderMode, PlanProperties, RecordBatchStream, SendableRecordBatchStream,
+    WindowExpr,
 };
 use ahash::RandomState;
 use arrow::compute::take_record_batch;
@@ -55,7 +55,9 @@ use datafusion_common::{
     arrow_datafusion_err, exec_err, DataFusionError, HashMap, Result,
 };
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use datafusion_expr::window_state::{PartitionBatchState, WindowAggState};
 use datafusion_expr::ColumnarValue;
 use datafusion_physical_expr::window::{
@@ -354,7 +356,9 @@ impl ExecutionPlan for BoundedWindowAggExec {
         for _ in 0..win_cols {
             column_statistics.push(ColumnStatistics::new_unknown()?)
         }
-        let total_byte_size = ProbabilityDistribution::new_unknown(&input_stat.total_byte_size.data_type())?;
+        let total_byte_size = ProbabilityDistribution::new_unknown(
+            &input_stat.total_byte_size.data_type(),
+        )?;
         Ok(TableStatistics {
             num_rows: input_stat.num_rows,
             column_statistics,

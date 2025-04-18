@@ -17,10 +17,12 @@
 use std::sync::Arc;
 
 use arrow_schema::DataType;
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_common::ScalarValue;
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use datafusion_expr::Operator;
 use futures::{Stream, StreamExt};
-use datafusion_common::ScalarValue;
 
 use crate::arrow::datatypes::SchemaRef;
 use crate::error::Result;
@@ -76,7 +78,9 @@ pub async fn get_statistics_with_limit(
         // files. This only applies when we know the number of rows. It also
         // currently ignores tables that have no statistics regarding the
         // number of rows.
-        let conservative_num_rows = num_rows.get_value().unwrap_or(&ScalarValue::UInt64(Some(u64::MIN)));
+        let conservative_num_rows = num_rows
+            .get_value()
+            .unwrap_or(&ScalarValue::UInt64(Some(u64::MIN)));
         if conservative_num_rows <= &limit {
             while let Some(current) = all_files.next().await {
                 let (mut file, file_stats) = current?;
@@ -90,11 +94,17 @@ pub async fn get_statistics_with_limit(
                 // counts across all the files in question. If any file does not
                 // provide any information or provides an inexact value, we demote
                 // the statistic precision to inexact.
-                num_rows = 
-                    ProbabilityDistribution::combine_distributions(&Operator::Plus, &file_stats.num_rows, &num_rows)?;
+                num_rows = ProbabilityDistribution::combine_distributions(
+                    &Operator::Plus,
+                    &file_stats.num_rows,
+                    &num_rows,
+                )?;
 
-                total_byte_size =
-                    ProbabilityDistribution::combine_distributions(&Operator::Plus, &file_stats.total_byte_size, &total_byte_size)?;
+                total_byte_size = ProbabilityDistribution::combine_distributions(
+                    &Operator::Plus,
+                    &file_stats.total_byte_size,
+                    &total_byte_size,
+                )?;
 
                 for (file_col_stats, col_stats) in file_stats
                     .column_statistics
@@ -109,19 +119,28 @@ pub async fn get_statistics_with_limit(
                         distinct_count: _,
                     } = file_col_stats;
 
-                    col_stats.null_count = 
-                        ProbabilityDistribution::combine_distributions(&Operator::Plus, &file_nc, &col_stats.null_count)?;
+                    col_stats.null_count =
+                        ProbabilityDistribution::combine_distributions(
+                            &Operator::Plus,
+                            &file_nc,
+                            &col_stats.null_count,
+                        )?;
                     set_max_if_greater(file_max, &mut col_stats.max_value);
                     set_min_if_lesser(file_min, &mut col_stats.min_value);
-                    col_stats.sum_value = 
-                        ProbabilityDistribution::combine_distributions(&Operator::Plus, file_sum, &col_stats.sum_value)?;
+                    col_stats.sum_value = ProbabilityDistribution::combine_distributions(
+                        &Operator::Plus,
+                        file_sum,
+                        &col_stats.sum_value,
+                    )?;
                 }
 
                 // If the number of rows exceeds the limit, we can stop processing
                 // files. This only applies when we know the number of rows. It also
                 // currently ignores tables that have no statistics regarding the
                 // number of rows.
-                let num_rows = num_rows.get_value().unwrap_or(&ScalarValue::UInt64(Some(u64::MIN)));
+                let num_rows = num_rows
+                    .get_value()
+                    .unwrap_or(&ScalarValue::UInt64(Some(u64::MIN)));
                 if num_rows > &limit {
                     break;
                 }
@@ -151,7 +170,9 @@ fn set_max_if_greater(
     max_value: &mut ProbabilityDistribution,
 ) {
     let scalar_null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
-    if max_nominee.get_value().unwrap_or(&scalar_null) < max_value.get_value().unwrap_or(&scalar_null) {
+    if max_nominee.get_value().unwrap_or(&scalar_null)
+        < max_value.get_value().unwrap_or(&scalar_null)
+    {
         *max_value = max_nominee.clone();
     }
 }
@@ -163,7 +184,9 @@ fn set_min_if_lesser(
     min_value: &mut ProbabilityDistribution,
 ) {
     let scalar_null = ScalarValue::try_new_null(&DataType::UInt64).unwrap();
-    if min_nominee.get_value().unwrap_or(&scalar_null) > min_value.get_value().unwrap_or(&scalar_null) {
+    if min_nominee.get_value().unwrap_or(&scalar_null)
+        > min_value.get_value().unwrap_or(&scalar_null)
+    {
         *min_value = min_nominee.clone();
     }
 }

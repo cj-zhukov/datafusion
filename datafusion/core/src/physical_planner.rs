@@ -2839,35 +2839,35 @@ mod tests {
         ))
     }
 
-//     #[tokio::test]
-//     async fn test_display_plan_in_graphviz_format() {
-//         let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
+    //     #[tokio::test]
+    //     async fn test_display_plan_in_graphviz_format() {
+    //         let schema = Schema::new(vec![Field::new("id", DataType::Int32, false)]);
 
-//         let logical_plan = scan_empty(Some("employee"), &schema, None)
-//             .unwrap()
-//             .project(vec![col("id") + lit(2)])
-//             .unwrap()
-//             .build()
-//             .unwrap();
+    //         let logical_plan = scan_empty(Some("employee"), &schema, None)
+    //             .unwrap()
+    //             .project(vec![col("id") + lit(2)])
+    //             .unwrap()
+    //             .build()
+    //             .unwrap();
 
-//         let plan = plan(&logical_plan).await.unwrap();
+    //         let plan = plan(&logical_plan).await.unwrap();
 
-//         let expected_graph = r#"
-// // Begin DataFusion GraphViz Plan,
-// // display it online here: https://dreampuf.github.io/GraphvizOnline
+    //         let expected_graph = r#"
+    // // Begin DataFusion GraphViz Plan,
+    // // display it online here: https://dreampuf.github.io/GraphvizOnline
 
-// digraph {
-//     1[shape=box label="ProjectionExec: expr=[id@0 + 2 as employee.id + Int32(2)]", tooltip=""]
-//     2[shape=box label="EmptyExec", tooltip=""]
-//     1 -> 2 [arrowhead=none, arrowtail=normal, dir=back]
-// }
-// // End DataFusion GraphViz Plan
-// "#;
+    // digraph {
+    //     1[shape=box label="ProjectionExec: expr=[id@0 + 2 as employee.id + Int32(2)]", tooltip=""]
+    //     2[shape=box label="EmptyExec", tooltip=""]
+    //     1 -> 2 [arrowhead=none, arrowtail=normal, dir=back]
+    // }
+    // // End DataFusion GraphViz Plan
+    // "#;
 
-//         let generated_graph = format!("{}", displayable(&*plan).graphviz());
+    //         let generated_graph = format!("{}", displayable(&*plan).graphviz());
 
-//         assert_eq!(expected_graph, generated_graph);
-//     }
+    //         assert_eq!(expected_graph, generated_graph);
+    //     }
 
     #[tokio::test]
     async fn test_display_graphviz_with_statistics() {

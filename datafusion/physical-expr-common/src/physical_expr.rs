@@ -171,7 +171,10 @@ pub trait PhysicalExpr: Send + Sync + Display + Debug + DynEq + DynHash {
     /// statistics accordingly. The default implementation simply creates an
     /// unknown output distribution by combining input ranges. This logic loses
     /// distribution information, but is a safe default.
-    fn evaluate_statistics(&self, children: &[&ProbabilityDistribution]) -> Result<ProbabilityDistribution> {
+    fn evaluate_statistics(
+        &self,
+        children: &[&ProbabilityDistribution],
+    ) -> Result<ProbabilityDistribution> {
         let children_ranges = children
             .iter()
             .map(|c| c.range())

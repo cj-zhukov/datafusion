@@ -79,8 +79,9 @@ async fn get_parquet_exec(state: &SessionState, filter: Expr) -> DataSourceExec 
             .with_predicate(Arc::clone(&schema), predicate)
             .with_enable_page_index(true),
     );
-    let base_config =
-        FileScanConfig::new(object_store_url, schema, source).unwrap().with_file(partitioned_file);
+    let base_config = FileScanConfig::new(object_store_url, schema, source)
+        .unwrap()
+        .with_file(partitioned_file);
 
     DataSourceExec::new(Arc::new(base_config))
 }

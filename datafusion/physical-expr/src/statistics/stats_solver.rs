@@ -114,7 +114,10 @@ impl ExprStatisticsGraph {
     /// This function assigns given distributions to expressions in the DAEG.
     /// The argument `assignments` associates indices of sought expressions
     /// with their corresponding new distributions.
-    pub fn assign_statistics(&mut self, assignments: &[(usize, ProbabilityDistribution)]) {
+    pub fn assign_statistics(
+        &mut self,
+        assignments: &[(usize, ProbabilityDistribution)],
+    ) {
         for (index, stats) in assignments {
             let node_index = NodeIndex::from(*index as DefaultIx);
             self.graph[node_index].dist = stats.clone();
@@ -256,19 +259,31 @@ mod tests {
         graph.assign_statistics(&[
             (
                 0usize,
-                ProbabilityDistribution::new_uniform(Interval::make(Some(0.), Some(1.))?)?,
+                ProbabilityDistribution::new_uniform(Interval::make(
+                    Some(0.),
+                    Some(1.),
+                )?)?,
             ),
             (
                 1usize,
-                ProbabilityDistribution::new_uniform(Interval::make(Some(0.), Some(2.))?)?,
+                ProbabilityDistribution::new_uniform(Interval::make(
+                    Some(0.),
+                    Some(2.),
+                )?)?,
             ),
             (
                 3usize,
-                ProbabilityDistribution::new_uniform(Interval::make(Some(1.), Some(3.))?)?,
+                ProbabilityDistribution::new_uniform(Interval::make(
+                    Some(1.),
+                    Some(3.),
+                )?)?,
             ),
             (
                 4usize,
-                ProbabilityDistribution::new_uniform(Interval::make(Some(1.), Some(5.))?)?,
+                ProbabilityDistribution::new_uniform(Interval::make(
+                    Some(1.),
+                    Some(5.),
+                )?)?,
             ),
         ]);
         let ev_stats = graph.evaluate_statistics()?;

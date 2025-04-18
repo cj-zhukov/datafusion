@@ -21,8 +21,8 @@ pub use crate::ordering::InputOrderMode;
 pub use crate::stream::EmptyRecordBatchStream;
 
 pub use datafusion_common::hash_utils;
-pub use datafusion_common::utils::project_schema;
 pub use datafusion_common::internal_err;
+pub use datafusion_common::utils::project_schema;
 pub use datafusion_execution::{RecordBatchStream, SendableRecordBatchStream};
 use datafusion_expr::statistics::TableStatistics;
 pub use datafusion_expr::{Accumulator, ColumnarValue};

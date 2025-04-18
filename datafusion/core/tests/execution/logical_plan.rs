@@ -18,7 +18,7 @@
 //! Logical plans need to provide stable semantics, as downstream projects
 //! create them and depend on them. Test executable semantics of logical plans.
 
-use arrow::array::{Int64Array, UInt64Array};
+use arrow::array::UInt64Array;
 use arrow::datatypes::{DataType, Field};
 use datafusion::execution::session_state::SessionStateBuilder;
 use datafusion_common::{Column, DFSchema, Result, ScalarValue, Spans};

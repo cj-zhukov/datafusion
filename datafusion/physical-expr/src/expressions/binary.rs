@@ -39,7 +39,8 @@ use datafusion_expr::interval_arithmetic::{apply_operator, Interval};
 use datafusion_expr::sort_properties::ExprProperties;
 use datafusion_expr::statistics::ProbabilityDistribution::{Bernoulli, Gaussian};
 use datafusion_expr::statistics::{
-    combine_bernoullis, combine_gaussians, create_bernoulli_from_comparison, ProbabilityDistribution,
+    combine_bernoullis, combine_gaussians, create_bernoulli_from_comparison,
+    ProbabilityDistribution,
 };
 use datafusion_expr::{ColumnarValue, Operator};
 use datafusion_physical_expr_common::datum::{apply, apply_cmp, apply_cmp_for_nested};
@@ -490,7 +491,10 @@ impl PhysicalExpr for BinaryExpr {
         }
     }
 
-    fn evaluate_statistics(&self, children: &[&ProbabilityDistribution]) -> Result<ProbabilityDistribution> {
+    fn evaluate_statistics(
+        &self,
+        children: &[&ProbabilityDistribution],
+    ) -> Result<ProbabilityDistribution> {
         let (left, right) = (children[0], children[1]);
 
         if self.op.is_numerical_operators() {
@@ -4490,7 +4494,11 @@ mod tests {
                 let expr = binary_expr(Arc::clone(&a), op, Arc::clone(&b), schema)?;
                 assert_eq!(
                     expr.evaluate_statistics(&children)?,
-                    ProbabilityDistribution::combine_distributions(&op, children[0], children[1])?
+                    ProbabilityDistribution::combine_distributions(
+                        &op,
+                        children[0],
+                        children[1]
+                    )?
                 );
             }
         }
@@ -4513,8 +4521,10 @@ mod tests {
         )?);
         let neq = Arc::new(binary_expr(a, Operator::NotEq, b, schema)?);
 
-        let left_stat = &ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(7))?)?;
-        let right_stat = &ProbabilityDistribution::new_uniform(Interval::make(Some(4), Some(11))?)?;
+        let left_stat =
+            &ProbabilityDistribution::new_uniform(Interval::make(Some(0), Some(7))?)?;
+        let right_stat =
+            &ProbabilityDistribution::new_uniform(Interval::make(Some(4), Some(11))?)?;
 
         // Intervals: [0, 7], [4, 11].
         // The intersection is [4, 7], so the probability of equality is 4 / 64 = 1 / 16.
@@ -4541,7 +4551,10 @@ mod tests {
         let left_interval = Interval::make(Some(0.0), Some(12.0))?;
         let right_interval = Interval::make(Some(12.0), Some(36.0))?;
 
-        let parent = ProbabilityDistribution::new_uniform(Interval::make(Some(-432.), Some(432.))?)?;
+        let parent = ProbabilityDistribution::new_uniform(Interval::make(
+            Some(-432.),
+            Some(432.),
+        )?)?;
         let children = vec![
             vec![
                 ProbabilityDistribution::new_uniform(left_interval.clone())?,

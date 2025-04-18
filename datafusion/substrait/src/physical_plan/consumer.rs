@@ -138,7 +138,7 @@ pub async fn from_substrait_rel(
                         }
                         file_groups[part_index].push(partitioned_file)
                     }
-                    
+
                     base_config = base_config.with_file_groups(file_groups);
 
                     if let Some(MaskExpression { select, .. }) = &read.projection {

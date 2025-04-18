@@ -190,7 +190,13 @@ impl ExecutionPlan for CoalesceBatchesExec {
     }
 
     fn statistics(&self) -> Result<TableStatistics> {
-        TableStatistics::with_fetch(self.input.statistics()?, self.schema(), self.fetch, 0, 1)
+        TableStatistics::with_fetch(
+            self.input.statistics()?,
+            self.schema(),
+            self.fetch,
+            0,
+            1,
+        )
     }
 
     fn with_fetch(&self, limit: Option<usize>) -> Option<Arc<dyn ExecutionPlan>> {

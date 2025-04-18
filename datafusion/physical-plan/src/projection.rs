@@ -43,7 +43,9 @@ use datafusion_common::tree_node::{
 };
 use datafusion_common::{internal_err, JoinSide, Result, ScalarValue};
 use datafusion_execution::TaskContext;
-use datafusion_expr::statistics::{ColumnStatistics, ProbabilityDistribution, TableStatistics};
+use datafusion_expr::statistics::{
+    ColumnStatistics, ProbabilityDistribution, TableStatistics,
+};
 use datafusion_expr::Operator;
 use datafusion_physical_expr::equivalence::ProjectionMapping;
 use datafusion_physical_expr::utils::collect_columns;
@@ -317,9 +319,14 @@ fn stats_projection(
     }
 
     if primitive_row_size_possible {
-        let prim_row_size = ProbabilityDistribution::new_exact(ScalarValue::UInt64(Some(primitive_row_size as u64)))?;
-        stats.total_byte_size = 
-            ProbabilityDistribution::combine_distributions(&Operator::Multiply, &prim_row_size, &stats.num_rows)?;
+        let prim_row_size = ProbabilityDistribution::new_exact(ScalarValue::UInt64(
+            Some(primitive_row_size as u64),
+        ))?;
+        stats.total_byte_size = ProbabilityDistribution::combine_distributions(
+            &Operator::Multiply,
+            &prim_row_size,
+            &stats.num_rows,
+        )?;
     }
     stats.column_statistics = column_statistics;
     Ok(stats)

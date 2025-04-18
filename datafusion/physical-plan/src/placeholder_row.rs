@@ -173,11 +173,7 @@ impl ExecutionPlan for PlaceholderRowExec {
         let batch = self
             .data()
             .expect("Create single row placeholder RecordBatch should not fail");
-        common::compute_record_batch_statistics(
-            &[batch],
-            &self.schema,
-            None,
-        )
+        common::compute_record_batch_statistics(&[batch], &self.schema, None)
     }
 }
 
